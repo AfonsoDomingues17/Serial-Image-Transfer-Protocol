@@ -19,7 +19,13 @@
 #define FALSE 0
 #define TRUE 1
 
-#define BUF_SIZE 256
+#define BUF_SIZE 1024
+
+#define FLAG 0x7E
+#define A_SET 0x03
+#define A_UA 0x01
+#define C_SET 0x03
+#define C_UA 0x07
 
 volatile int STOP = FALSE;
 
@@ -89,33 +95,31 @@ int main(int argc, char *argv[])
     printf("New termios structure set\n");
 
     // Loop for input
-    unsigned char buf[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
+    unsigned char set_frame[BUF_SIZE]; 
+    unsigned char ua_frame[BUF_SIZE] = {FLAG,A_UA,C_UA,A_UA ^ C_UA,FLAG};
 
     while (STOP == FALSE)
     {
         // Returns after 5 chars have been input
-        int bytes = read(fd, buf, BUF_SIZE);
-        buf[bytes] = '\0'; // Set end of string to '\0', so we can printf
+        int bytes_read = read(fd, set_frame, BUF_SIZE);
+        for(int i = 0; i < bytes_read;i++) printf("%x",set_frame[i]);
 
-        /*
-        printf(":%s:%d\n", buf, bytes);
-        if (buf[0] == 'z')
-            STOP = TRUE;
-        */
-        if(buf[0] == 0x7E && buf[4] == 0x7E && (buf[1] ^ buf[2]) == buf[3] && buf[1] == 0x03 && buf[2] == 0x03) {
-            // Received a Frame to set connection.
-            // Transmitter is ready to start a connection, so: send UA back.
-            buf[0] = 0x7E; // FLAG
-            buf[1] = 0x03; // ADDRESS
-            buf[2] = 0x07; // CONTROL: UA
-            buf[3] = buf[1] ^ buf[2]; // BCC
-            buf[4] = 0x7E; // FLAG
-            buf[5] = '\0';
-            write(fd, buf, BUF_SIZE);
-            STOP = TRUE;
-            printf("Received frame to set connection. Sent frame to acknowledge connection!\n");
+        
+        if(set_frame[3] == (A_SET ^ C_SET)){
+        if(set_frame[0] == FLAG &&
+            set_frame[1] == A_SET &&
+            set_frame[2] == C_SET &&
+            set_frame[4] == FLAG){
+                printf("SET received sussfully\n");
+                int bytes = write(fd,ua_frame,5);
+                STOP = TRUE;
+            }
+            else printf("Invalid frame received not SET\n");
         }
-        sleep(1);
+
+        else {
+            printf("Invalid frame received not SET\n");
+        }
     }
 
     // The while() cycle should be changed in order to respect the specifications
