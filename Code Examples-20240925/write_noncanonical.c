@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
+#include <signal.h>
 
 // Baudrate settings are defined in <asm/termbits.h>, which is
 // included by <termios.h>
@@ -22,13 +23,62 @@
 #define BUF_SIZE 1024
 
 #define FLAG 0x7E
-#define A_SET 0x03
-#define A_UA 0x01
-#define C_SET 0x03
-#define C_UA 0x07
+#define ADDRESS 0x03
+#define CONTROL_SET 0x03
+#define CONTROL_UA 0x07
 
 
 volatile int STOP = FALSE;
+
+int alarmEnabled = FALSE;
+int alarmCount = 0;
+
+
+void alarmHandler(int signal)
+{
+    alarmEnabled = FALSE;
+    alarmCount++;
+
+    printf("Alarm #%d\n", alarmCount);
+}
+
+void sendframme(int fd, unsigned char set_frame[], unsigned n_bytes){
+    while (alarmCount < 5)
+    {
+        if (alarmEnabled == FALSE)
+        {
+            alarm(3); // Set alarm to be triggered in 3s
+            alarmEnabled = TRUE;
+
+            int bytes = write(fd, set_frame, 5);
+            printf("%d bytes written\n", bytes);
+
+            unsigned char ua_frame[BUF_SIZE];
+            int bytes_read = read(fd,ua_frame, BUF_SIZE);
+
+            if (bytes_read < 5) continue;
+
+            if(ua_frame[3] == (ADDRESS ^ CONTROL_UA) ){
+                    if(ua_frame[0] == FLAG &&
+                    ua_frame[1] == ADDRESS &&
+                    ua_frame[2] == CONTROL_UA &&
+                    ua_frame[4] == FLAG){
+                        alarm(0);
+                        alarmEnabled = FALSE;
+                        printf("Connection established sucssfuly\n");
+                        return;
+                    }
+                    else{
+                        printf("Invalid UA frame");
+                    }
+                }
+            else {
+                printf("Invalid UA frame");
+            }
+
+        }
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -75,7 +125,7 @@ int main(int argc, char *argv[])
     // Set input mode (non-canonical, no echo,...)
     newtio.c_lflag = 0;
     newtio.c_cc[VTIME] = 0; // Inter-character timer unused
-    newtio.c_cc[VMIN] = 5;  // Blocking read until 5 chars received
+    newtio.c_cc[VMIN] = 0;  // Blocking read until 5 chars received
 
     // VTIME e VMIN should be changed in order to protect with a
     // timeout the reception of the following character(s)
@@ -96,10 +146,14 @@ int main(int argc, char *argv[])
 
     printf("New termios structure set\n");
 
-    // Create string to send
-    unsigned char set_frame[BUF_SIZE] = {FLAG,A_SET,C_SET,0x00,FLAG};
+    (void)signal(SIGALRM, alarmHandler);
 
-    set_frame[3] = A_SET ^ C_SET;
+
+
+    // Create string to send
+    unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS,CONTROL_SET,0x00,FLAG};
+
+    set_frame[3] = ADDRESS ^ CONTROL_SET;
 
 
     // In non-canonical mode, '\n' does not end the writing.
@@ -107,31 +161,7 @@ int main(int argc, char *argv[])
     // The whole buffer must be sent even with the '\n'.
     //buf[5] = '\n';
 
-    int bytes = write(fd, set_frame, 5);
-    printf("%d bytes written\n", bytes);
-
-    // Wait until all bytes have been written to the serial port
-    sleep(1);
-
-    unsigned char ua_frame[BUF_SIZE];
-    int bytes_read = read(fd,ua_frame, BUF_SIZE);
-    
-    //for(int i = 0; i < BUF_SIZE;i++) printf("%x",ua_frame[i]);
-    if(ua_frame[3] == (A_UA ^ C_UA) ){
-            if(ua_frame[0] == FLAG &&
-            ua_frame[1] == A_UA &&
-            ua_frame[2] == C_UA &&
-            ua_frame[4] == FLAG){
-                printf("Connection established sucssfuly\n");
-            }
-            else{
-                printf("Invalid UA frame");
-            }
-        }
-    else {
-        printf("Invalid UA frame");
-    }
-    
+    sendframme(fd, set_frame, 5);
 
     // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
