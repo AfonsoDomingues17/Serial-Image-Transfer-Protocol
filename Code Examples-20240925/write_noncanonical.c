@@ -19,7 +19,14 @@
 #define FALSE 0
 #define TRUE 1
 
-#define BUF_SIZE 256
+#define BUF_SIZE 1024
+
+#define FLAG 0x7E
+#define A_SET 0x03
+#define A_UA 0x01
+#define C_SET 0x03
+#define C_UA 0x07
+
 
 volatile int STOP = FALSE;
 
@@ -90,43 +97,41 @@ int main(int argc, char *argv[])
     printf("New termios structure set\n");
 
     // Create string to send
-    unsigned char buf[BUF_SIZE] = {0};
-    /*
-    for (int i = 0; i < BUF_SIZE; i++)
-    {
-        buf[i] = 'a' + i % 26;
-    }
-    */
-    buf[0] = 0x7E; // FLAG
-    buf[1] = 0x03; // ADDRESS
-    buf[2] = 0x03; // CONTROL: SET
-    buf[3] = buf[1] ^ buf[2]; // BCC
-    buf[4] = 0x7E; // FLAG
+    unsigned char set_frame[BUF_SIZE] = {FLAG,A_SET,C_SET,0x00,FLAG};
+
+    set_frame[3] = A_SET ^ C_SET;
+
 
     // In non-canonical mode, '\n' does not end the writing.
     // Test this condition by placing a '\n' in the middle of the buffer.
     // The whole buffer must be sent even with the '\n'.
-    // buf[5] = '\n';
+    //buf[5] = '\n';
 
-    int bytes = write(fd, buf, BUF_SIZE);
+    int bytes = write(fd, set_frame, 5);
     printf("%d bytes written\n", bytes);
 
     // Wait until all bytes have been written to the serial port
     sleep(1);
 
-    memset(buf, 0, BUF_SIZE);
-
-    while (STOP == FALSE) {
-        int bytes = read(fd, buf, BUF_SIZE);
-        buf[bytes] = '\0'; // Set end of string to '\0', so we can printf
-
-        if(bytes == 0) sleep(1);
-
-        if (buf[0] == 0x7E && buf[4] == 0x7E && (buf[1] ^ buf[2]) == buf[3] && buf[1] == 0x03 && buf[2] == 0x07) {
-            printf("Connection established!\n");
-            STOP = TRUE;
+    unsigned char ua_frame[BUF_SIZE];
+    int bytes_read = read(fd,ua_frame, BUF_SIZE);
+    
+    //for(int i = 0; i < BUF_SIZE;i++) printf("%x",ua_frame[i]);
+    if(ua_frame[3] == (A_UA ^ C_UA) ){
+            if(ua_frame[0] == FLAG &&
+            ua_frame[1] == A_UA &&
+            ua_frame[2] == C_UA &&
+            ua_frame[4] == FLAG){
+                printf("Connection established sucssfuly\n");
+            }
+            else{
+                printf("Invalid UA frame");
+            }
         }
+    else {
+        printf("Invalid UA frame");
     }
+    
 
     // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
