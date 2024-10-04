@@ -22,7 +22,8 @@
 #define BUF_SIZE 1024
 
 #define FLAG 0x7E
-#define ADDRESS 0x03
+#define ADDRESS_SET 0x03
+#define ADDRESS_UA 0x01
 #define CONTROL_SET 0x03
 #define CONTROL_UA 0x07
 
@@ -72,7 +73,7 @@ int main(int argc, char *argv[])
     // Set input mode (non-canonical, no echo,...)
     newtio.c_lflag = 0;
     newtio.c_cc[VTIME] = 0; // Inter-character timer unused
-    newtio.c_cc[VMIN] = 0;  // Blocking read until 5 chars received
+    newtio.c_cc[VMIN] = 5;  // Blocking read until 5 chars received
 
     // VTIME e VMIN should be changed in order to protect with a
     // timeout the reception of the following character(s)
@@ -95,7 +96,7 @@ int main(int argc, char *argv[])
 
     // Loop for input
     unsigned char set_frame[BUF_SIZE]; 
-    unsigned char ua_frame[BUF_SIZE] = {FLAG,ADDRESS,CONTROL_UA,ADDRESS ^ CONTROL_UA,FLAG};
+    unsigned char ua_frame[BUF_SIZE] = {FLAG,ADDRESS_UA,CONTROL_UA,ADDRESS_UA ^ CONTROL_UA,FLAG};
 
     while (STOP == FALSE)
     {
@@ -104,9 +105,9 @@ int main(int argc, char *argv[])
         for(int i = 0; i < bytes_read;i++) printf("%x",set_frame[i]);
 
         
-        if(set_frame[3] == (ADDRESS ^ CONTROL_SET)){
+        if(set_frame[3] == (ADDRESS_SET ^ CONTROL_SET)){
         if(set_frame[0] == FLAG &&
-            set_frame[1] == ADDRESS &&
+            set_frame[1] == ADDRESS_SET &&
             set_frame[2] == CONTROL_SET &&
             set_frame[4] == FLAG){
                 printf("SET received sussfully\n");

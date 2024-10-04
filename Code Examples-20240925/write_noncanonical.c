@@ -23,7 +23,8 @@
 #define BUF_SIZE 1024
 
 #define FLAG 0x7E
-#define ADDRESS 0x03
+#define ADDRESS_SET 0x03
+#define ADDRESS_UA 0x01
 #define CONTROL_SET 0x03
 #define CONTROL_UA 0x07
 
@@ -58,9 +59,9 @@ void sendframme(int fd, unsigned char set_frame[], unsigned n_bytes){
 
             if (bytes_read < 5) continue;
 
-            if(ua_frame[3] == (ADDRESS ^ CONTROL_UA) ){
+            if(ua_frame[3] == (ADDRESS_UA ^ CONTROL_UA) ){
                     if(ua_frame[0] == FLAG &&
-                    ua_frame[1] == ADDRESS &&
+                    ua_frame[1] == ADDRESS_UA &&
                     ua_frame[2] == CONTROL_UA &&
                     ua_frame[4] == FLAG){
                         alarm(0);
@@ -151,9 +152,9 @@ int main(int argc, char *argv[])
 
 
     // Create string to send
-    unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS,CONTROL_SET,0x00,FLAG};
+    unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS_SET,CONTROL_SET,0x00,FLAG};
 
-    set_frame[3] = ADDRESS ^ CONTROL_SET;
+    set_frame[3] = ADDRESS_SET ^ CONTROL_SET;
 
 
     // In non-canonical mode, '\n' does not end the writing.
