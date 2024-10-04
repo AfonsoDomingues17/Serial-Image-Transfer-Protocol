@@ -32,8 +32,6 @@
 volatile int STOP = FALSE;
 
 int alarmEnabled = FALSE;
-int alarmCount = 0;
-
 
 void alarmHandler(int signal)
 {
@@ -44,12 +42,14 @@ void alarmHandler(int signal)
 }
 
 void sendframme(int fd, unsigned char set_frame[], unsigned n_bytes){
+    int alarmCount = 0;
     while (alarmCount < 5)
     {
         if (alarmEnabled == FALSE)
         {
             alarm(3); // Set alarm to be triggered in 3s
             alarmEnabled = TRUE;
+            alarmCount++;
 
             int bytes = write(fd, set_frame, 5);
             printf("%d bytes written\n", bytes);
