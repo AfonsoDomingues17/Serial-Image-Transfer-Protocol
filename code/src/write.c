@@ -37,6 +37,7 @@ typedef enum setMsgState {
     STOP_S
 } setMsgState;
 
+
 volatile int STOP = FALSE;
 
 int alarmEnabled = FALSE;
@@ -51,35 +52,36 @@ void alarmHandler(int signal)
     printf("Alarm #%d\n", alarmCount);
 }
 
-void sendSetFrame(int fd){
-    alarmCount = 0;
-     // Create string to send
+void stablishConnection() {
     unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS_SET,CONTROL_SET,0x00,FLAG};
-
     set_frame[3] = ADDRESS_SET ^ CONTROL_SET;
     setMsgState state = START_S;
+
+
+    alarmCount = 0;
     while (alarmCount < 5) {
-        if (alarmEnabled == FALSE)
-        {
+        if (alarmEnabled == FALSE) {
             alarm(3); // Set alarm to be triggered in 3s
             alarmEnabled = TRUE;
 
-            int bytes = write(fd, set_frame, 5);
+            int bytes = writeBytesSerialPort(set_frame, 5);
             printf("%d bytes written\n", bytes);
 
             sleep(1);
 
             unsigned char ua_frame[BUF_SIZE] = {0};
+
+            //if (bytes_read < 5) continue;
             while (state != STOP_S) {
                 unsigned char byte_read = 0;
-                int n_bytes_read = read(fd, &byte_read, 1);
+                int n_bytes_read = readByteSerialPort(&byte_read);
                 if (n_bytes_read != 1) printf("Failed to read byte from serial port.\n");
                 switch (state) {
                     case START_S:
                         if(byte_read == FLAG){
                             state = FLAG_S;
                             ua_frame[0] = byte_read;
-                            //printf("First flag received\n");
+                            // printf("First flag received\n");
                         }
                         break;
                     
@@ -87,11 +89,11 @@ void sendSetFrame(int fd){
                         if(byte_read == ADDRESS_UA){
                             state = ADDRESS_S;
                             ua_frame[1] = byte_read;
-                            //printf("Adress received\n");
+                            // printf("Adress received\n");
                         }
                         else if(byte_read != FLAG){
                             state = START_S;
-                            //printf("Back to start :(\n");
+                            // printf("Back to start :(\n");
                         }
                         break;
                     
@@ -99,13 +101,13 @@ void sendSetFrame(int fd){
                         if(byte_read == CONTROL_UA) {
                             state = CONTROL_S;
                             ua_frame[2] = byte_read;
-                            //printf("Control received\n");
+                            // printf("Control received\n");
                         } else if (byte_read == FLAG) {
                             state = FLAG_S;
-                            //printf("Flag received instead of control\n");
+                            // printf("Flag received instead of control\n");
                         } else {
                             state = START_S;
-                            //printf("Back to start from address\n");
+                            // printf("Back to start from address\n");
                         }
                         break;
                     
@@ -113,15 +115,15 @@ void sendSetFrame(int fd){
                         if(byte_read == (ADDRESS_UA ^ CONTROL_UA)){
                             state = BCC_S;
                             ua_frame[3] = byte_read;
-                            //printf("BCC received\n");
+                            // printf("BCC received\n");
                         }
                         else if(byte_read == FLAG){
                             state = FLAG_S;
-                            //printf("Flag received instead of BCC\n");
+                            // printf("Flag received instead of BCC\n");
                         }
                         else {
                             state = START_S;
-                            //printf("Back to start from control\n");
+                            // printf("Back to start from control\n");
                         }
                         break;
                     
@@ -129,11 +131,11 @@ void sendSetFrame(int fd){
                         if (byte_read == FLAG) {
                             state = STOP_S;
                             ua_frame[4] = byte_read;
-                            //printf("Last flag received proceded to stop\n");
+                            // printf("Last flag received proceded to stop\n");
                         }
                         else {
                             state = START_S;
-                            //printf("All the way to the start from BCC\n");
+                            // printf("All the way to the start from BCC\n");
                         }
                         break;
                     
@@ -141,10 +143,7 @@ void sendSetFrame(int fd){
                         break;
                 }
             }
-            alarm(0);
-            alarmEnabled = FALSE;
-            printf("Connection established sucssfuly\n");
-            return;
+            
 
         }
     }
@@ -155,87 +154,13 @@ int main(int argc, char *argv[])
     // Program usage: Uses either COM1 or COM2
     const char *serialPortName = argv[1];
 
-    if (argc < 2)
-    {
-        printf("Incorrect program usage\n"
-               "Usage: %s <SerialPort>\n"
-               "Example: %s /dev/ttyS1\n",
-               argv[0],
-               argv[0]);
-        exit(1);
-    }
-
-    // Open serial port device for reading and writing, and not as controlling tty
-    // because we don't want to get killed if linenoise sends CTRL-C.
-    int fd = open(serialPortName, O_RDWR | O_NOCTTY);
-
-    if (fd < 0)
-    {
-        perror(serialPortName);
-        exit(-1);
-    }
-
-    struct termios oldtio;
-    struct termios newtio;
-
-    // Save current port settings
-    if (tcgetattr(fd, &oldtio) == -1)
-    {
-        perror("tcgetattr");
-        exit(-1);
-    }
-
-    // Clear struct for new port settings
-    memset(&newtio, 0, sizeof(newtio));
-
-    newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
-    newtio.c_iflag = IGNPAR;
-    newtio.c_oflag = 0;
-
-    // Set input mode (non-canonical, no echo,...)
-    newtio.c_lflag = 0;
-    newtio.c_cc[VTIME] = 0; // Inter-character timer unused
-    newtio.c_cc[VMIN] = 0;  // Blocking read until 5 chars received
-
-    // VTIME e VMIN should be changed in order to protect with a
-    // timeout the reception of the following character(s)
-
-    // Now clean the line and activate the settings for the port
-    // tcflush() discards data written to the object referred to
-    // by fd but not transmitted, or data received but not read,
-    // depending on the value of queue_selector:
-    //   TCIFLUSH - flushes data received but not read.
-    tcflush(fd, TCIOFLUSH);
-
-    // Set new port settings
-    if (tcsetattr(fd, TCSANOW, &newtio) == -1)
-    {
-        perror("tcsetattr");
-        exit(-1);
-    }
-
-    printf("New termios structure set\n");
+    if(openSerialPort(serialPortName, BAUDRATE) == -1) printf("ERROR: Failed to open Serial Port.\n");
 
     (void)signal(SIGALRM, alarmHandler);
 
+    stablishConnection();
 
-
-
-    // In non-canonical mode, '\n' does not end the writing.
-    // Test this condition by placing a '\n' in the middle of the buffer.
-    // The whole buffer must be sent even with the '\n'.
-    //buf[5] = '\n';
-
-    sendSetFrame(fd);
-
-    // Restore the old port settings
-    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
-    {
-        perror("tcsetattr");
-        exit(-1);
-    }
-
-    close(fd);
+    if (closeSerialPort() == -1) printf("ERROR: Failed to close Serial Port.\n");
 
     return 0;
 }
