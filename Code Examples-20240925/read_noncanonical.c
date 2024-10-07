@@ -22,10 +22,10 @@
 #define BUF_SIZE 1024
 
 #define FLAG 0x7E
-#define A_SET 0x03
-#define A_UA 0x01
-#define C_SET 0x03
-#define C_UA 0x07
+#define ADDRESS_SET 0x03
+#define ADDRESS_UA 0x01
+#define CONTROL_SET 0x03
+#define CONTROL_UA 0x07
 
 volatile int STOP = FALSE;
 
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 
     // Loop for input
     unsigned char set_frame[BUF_SIZE]; 
-    unsigned char ua_frame[BUF_SIZE] = {FLAG,A_UA,C_UA,A_UA ^ C_UA,FLAG};
+    unsigned char ua_frame[BUF_SIZE] = {FLAG,ADDRESS_UA,CONTROL_UA,ADDRESS_UA ^ CONTROL_UA,FLAG};
 
     while (STOP == FALSE)
     {
@@ -105,10 +105,10 @@ int main(int argc, char *argv[])
         for(int i = 0; i < bytes_read;i++) printf("%x",set_frame[i]);
 
         
-        if(set_frame[3] == (A_SET ^ C_SET)){
+        if(set_frame[3] == (ADDRESS_SET ^ CONTROL_SET)){
         if(set_frame[0] == FLAG &&
-            set_frame[1] == A_SET &&
-            set_frame[2] == C_SET &&
+            set_frame[1] == ADDRESS_SET &&
+            set_frame[2] == CONTROL_SET &&
             set_frame[4] == FLAG){
                 printf("SET received sussfully\n");
                 int bytes = write(fd,ua_frame,5);
