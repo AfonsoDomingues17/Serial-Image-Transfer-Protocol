@@ -28,6 +28,8 @@
 #define CONTROL_SET 0x03
 #define CONTROL_UA 0x07
 
+#include "state_machine.h"
+
 typedef enum setMsgState {
     START_S,
     FLAG_S,
@@ -51,99 +53,29 @@ void alarmHandler(int signal)
     printf("Alarm #%d\n", alarmCount);
 }
 
-void sendSetFrame(int fd){
-    alarmCount = 0;
-     // Create string to send
-    unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS_SET,CONTROL_SET,0x00,FLAG};
+#define CONNECTION  0
+#define SEND        1
 
-    set_frame[3] = ADDRESS_SET ^ CONTROL_SET;
-    setMsgState state = START_S;
+void sendFrame(int fd, unsigned char buf[], unsigned size, unsigned char type) {
+    alarmCount = 0;
+
     while (alarmCount < 5) {
-        if (alarmEnabled == FALSE)
-        {
+        if (alarmEnabled == FALSE) {
             alarm(3); // Set alarm to be triggered in 3s
             alarmEnabled = TRUE;
 
-            int bytes = write(fd, set_frame, 5);
+            int bytes = write(fd, buf, size);
             printf("%d bytes written\n", bytes);
 
             sleep(1);
 
-            unsigned char ua_frame[BUF_SIZE] = {0};
-            while (state != STOP_S) {
-                unsigned char byte_read = 0;
-                int n_bytes_read = read(fd, &byte_read, 1);
-                if (n_bytes_read != 1) printf("Failed to read byte from serial port.\n");
-                switch (state) {
-                    case START_S:
-                        if(byte_read == FLAG){
-                            state = FLAG_S;
-                            ua_frame[0] = byte_read;
-                            //printf("First flag received\n");
-                        }
-                        break;
-                    
-                    case FLAG_S:
-                        if(byte_read == ADDRESS_UA){
-                            state = ADDRESS_S;
-                            ua_frame[1] = byte_read;
-                            //printf("Adress received\n");
-                        }
-                        else if(byte_read != FLAG){
-                            state = START_S;
-                            //printf("Back to start :(\n");
-                        }
-                        break;
-                    
-                    case ADDRESS_S:
-                        if(byte_read == CONTROL_UA) {
-                            state = CONTROL_S;
-                            ua_frame[2] = byte_read;
-                            //printf("Control received\n");
-                        } else if (byte_read == FLAG) {
-                            state = FLAG_S;
-                            //printf("Flag received instead of control\n");
-                        } else {
-                            state = START_S;
-                            //printf("Back to start from address\n");
-                        }
-                        break;
-                    
-                    case CONTROL_S:
-                        if(byte_read == (ADDRESS_UA ^ CONTROL_UA)){
-                            state = BCC_S;
-                            ua_frame[3] = byte_read;
-                            //printf("BCC received\n");
-                        }
-                        else if(byte_read == FLAG){
-                            state = FLAG_S;
-                            //printf("Flag received instead of BCC\n");
-                        }
-                        else {
-                            state = START_S;
-                            //printf("Back to start from control\n");
-                        }
-                        break;
-                    
-                    case BCC_S:
-                        if (byte_read == FLAG) {
-                            state = STOP_S;
-                            ua_frame[4] = byte_read;
-                            //printf("Last flag received proceded to stop\n");
-                        }
-                        else {
-                            state = START_S;
-                            //printf("All the way to the start from BCC\n");
-                        }
-                        break;
-                    
-                    default:
-                        break;
-                }
-            }
+            if (type == CONNECTION) {
+                stablishConnectionSender(fd);
+                printf("Connection established sucssfuly\n");
+            } 
+
             alarm(0);
             alarmEnabled = FALSE;
-            printf("Connection established sucssfuly\n");
             return;
 
         }
@@ -226,7 +158,8 @@ int main(int argc, char *argv[])
     // The whole buffer must be sent even with the '\n'.
     //buf[5] = '\n';
 
-    sendSetFrame(fd);
+    unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS_SET,CONTROL_SET,ADDRESS_SET ^ CONTROL_SET,FLAG};
+    sendFrame(fd, set_frame,5,CONNECTION);
 
     // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)

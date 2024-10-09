@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
+#include "state_machine.h"
 
 // Baudrate settings are defined in <asm/termbits.h>, which is
 // included by <termios.h>
@@ -105,82 +106,9 @@ int main(int argc, char *argv[])
     printf("New termios structure set\n");
 
     // Loop for input
-    unsigned char set_frame[BUF_SIZE] = {0}; 
     unsigned char ua_frame[BUF_SIZE] = {FLAG,ADDRESS_UA,CONTROL_UA,ADDRESS_UA ^ CONTROL_UA,FLAG};
 
-    setMsgState state = START_S;
-
-    while (state != STOP_S) {
-        unsigned char byte_read = 0;
-        int n_bytes_read = read(fd, &byte_read, 1);
-        if (n_bytes_read != 1) printf("Failed to read byte from serial port.\n");
-        switch (state) {
-            case START_S:
-                if(byte_read == FLAG){
-                    state = FLAG_S;
-                    set_frame[0] = byte_read;
-                    printf("First flag received\n");
-                }
-                break;
-            
-            case FLAG_S:
-                if(byte_read == ADDRESS_SET){
-                    state = ADDRESS_S;
-                    set_frame[1] = byte_read;
-                    printf("Adress received\n");
-                }
-                else if(byte_read != FLAG){
-                    state = START_S;
-                    printf("Back to start :(\n");
-                }
-                break;
-            
-            case ADDRESS_S:
-                if(byte_read == CONTROL_SET) {
-                    state = CONTROL_S;
-                    set_frame[2] = byte_read;
-                    printf("Control received\n");
-                } else if (byte_read == FLAG) {
-                    state = FLAG_S;
-                    printf("Flag received instead of control\n");
-                } else {
-                    state = START_S;
-                    printf("Back to start from address\n");
-                }
-                break;
-            
-            case CONTROL_S:
-                if(byte_read == (ADDRESS_SET ^ CONTROL_SET)){
-                    state = BCC_S;
-                    set_frame[3] = byte_read;
-                    printf("BCC received\n");
-                }
-                else if(byte_read == FLAG){
-                    state = FLAG_S;
-                    printf("Flag received instead of BCC\n");
-                }
-                else {
-                    state = START_S;
-                    printf("Back to start from control\n");
-                }
-                break;
-            
-            case BCC_S:
-                if (byte_read == FLAG) {
-                    state = STOP_S;
-                    set_frame[4] = byte_read;
-                    printf("Last flag received proceded to stop\n");
-                }
-                else {
-                    state = START_S;
-                    printf("All the way to the start from BCC\n");
-                }
-                break;
-            
-            default:
-                break;
-        }
-    }
+    stablishConnectionReceiver(fd);
     // for(int i = 0; i < 5;i++) printf("%X ",set_frame[i]);
     // printf("\n");
     printf("Connection stablished sussfully!\n");
