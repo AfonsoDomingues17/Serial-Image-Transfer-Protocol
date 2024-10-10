@@ -35,6 +35,8 @@ typedef enum {
     STOP_STATE
 } stablishConnectionState;
 
+
+
 /**
  * @brief State Machine to stablish connection (to be runned on sender).
  * 
