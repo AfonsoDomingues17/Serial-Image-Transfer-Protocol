@@ -70,7 +70,7 @@ void stablishConnectionSender(int fd){
 }
 */
 
-extern stablishConnectionState state;
+stablishConnectionState state = START_STATE;
 
 void stablishConnectionReceiver(int fd) {
 

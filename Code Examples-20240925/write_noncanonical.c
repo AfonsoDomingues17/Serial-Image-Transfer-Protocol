@@ -32,7 +32,6 @@
 
 #include "state_machine.h"
 
-stablishConnectionState state = START_STATE;
 
 
 volatile int STOP = FALSE;
@@ -45,7 +44,6 @@ void alarmHandler(int signal)
 {
     alarmEnabled = FALSE;
     alarmCount++;
-    state = START_STATE;
     printf("Alarm #%d\n", alarmCount);
 }
 
