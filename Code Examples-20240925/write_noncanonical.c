@@ -28,16 +28,12 @@
 #define CONTROL_SET 0x03
 #define CONTROL_UA 0x07
 
+
+
 #include "state_machine.h"
 
-typedef enum setMsgState {
-    START_S,
-    FLAG_S,
-    ADDRESS_S,
-    CONTROL_S,
-    BCC_S,
-    STOP_S
-} setMsgState;
+stablishConnectionState state = START_STATE;
+
 
 volatile int STOP = FALSE;
 
@@ -49,7 +45,7 @@ void alarmHandler(int signal)
 {
     alarmEnabled = FALSE;
     alarmCount++;
-
+    state = START_STATE;
     printf("Alarm #%d\n", alarmCount);
 }
 
@@ -57,26 +53,40 @@ void alarmHandler(int signal)
 #define SEND        1
 
 void sendFrame(int fd, unsigned char buf[], unsigned size, unsigned char type) {
-    alarmCount = 0;
-
+    //alarmCount = 0;
     while (alarmCount < 5) {
         if (alarmEnabled == FALSE) {
             alarm(3); // Set alarm to be triggered in 3s
             alarmEnabled = TRUE;
-
+            
             int bytes = write(fd, buf, size);
             printf("%d bytes written\n", bytes);
+            
+            unsigned char ua_frame[BUF_SIZE] = {0};
+            int bytes_read = read(fd,ua_frame, BUF_SIZE);
+            for(unsigned i = 0; i < bytes_read; i++) printf("Byte[%d]:%x\n",i,ua_frame[i]);
 
-            sleep(1);
+            //if (bytes_read < 5) continue;
+            if(type == CONNECTION){
+            if(ua_frame[3] == (ADDRESS_UA ^ CONTROL_UA) ){
+                    if(ua_frame[0] == FLAG &&
+                    ua_frame[1] == ADDRESS_UA &&
+                    ua_frame[2] == CONTROL_UA &&
+                    ua_frame[4] == FLAG){
+                        alarm(0);
+                        alarmEnabled = FALSE;
+                        printf("Connection established sucssfuly\n");
+                        return;
+                    }
+                    else{
+                        printf("Invalid UA frame\n");
+                    }
+            }
+            else {
+                printf("Invalid UA frame\n");
+            }
+            }
 
-            if (type == CONNECTION) {
-                stablishConnectionSender(fd);
-                printf("Connection established sucssfuly\n");
-            } 
-
-            alarm(0);
-            alarmEnabled = FALSE;
-            return;
 
         }
     }
@@ -159,7 +169,7 @@ int main(int argc, char *argv[])
     //buf[5] = '\n';
 
     unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS_SET,CONTROL_SET,ADDRESS_SET ^ CONTROL_SET,FLAG};
-    sendFrame(fd, set_frame,5,CONNECTION);
+    sendFrame(fd, set_frame,4,CONNECTION);
 
     // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
