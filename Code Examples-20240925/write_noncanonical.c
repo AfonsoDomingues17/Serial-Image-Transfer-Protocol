@@ -12,6 +12,8 @@
 #include <unistd.h>
 #include <signal.h>
 
+#include "state_machine.h"
+
 // Baudrate settings are defined in <asm/termbits.h>, which is
 // included by <termios.h>
 #define BAUDRATE B38400
@@ -28,12 +30,6 @@
 #define CONTROL_SET 0x03
 #define CONTROL_UA 0x07
 
-
-
-#include "state_machine.h"
-
-
-
 volatile int STOP = FALSE;
 
 int alarmEnabled = FALSE;
@@ -47,10 +43,12 @@ void alarmHandler(int signal)
     printf("Alarm #%d\n", alarmCount);
 }
 
-#define CONNECTION  0
-#define SEND        1
+typedef enum {
+    SEND_0,
+    SEND_1
+} frame_t;
 
-void sendFrame(int fd, unsigned char buf[], unsigned size, unsigned char type) {
+void stablishConnection(int fd, unsigned char buf[], unsigned size) {
     //alarmCount = 0;
     while (alarmCount < 5) {
         if (alarmEnabled == FALSE) {
@@ -59,33 +57,67 @@ void sendFrame(int fd, unsigned char buf[], unsigned size, unsigned char type) {
             
             int bytes = write(fd, buf, size);
             printf("%d bytes written\n", bytes);
+            sleep(1); // TODO: sleep less time. Maybe some ticks.
             
             unsigned char ua_frame[BUF_SIZE] = {0};
             int bytes_read = read(fd,ua_frame, BUF_SIZE);
-            for(unsigned i = 0; i < bytes_read; i++) printf("Byte[%d]:%x\n",i,ua_frame[i]);
+            for (unsigned i = 0; i < bytes_read; i++) printf("Byte[%d]:%x\n",i,ua_frame[i]);
 
             //if (bytes_read < 5) continue;
-            if(type == CONNECTION){
+            
             if(ua_frame[3] == (ADDRESS_UA ^ CONTROL_UA) ){
-                    if(ua_frame[0] == FLAG &&
-                    ua_frame[1] == ADDRESS_UA &&
-                    ua_frame[2] == CONTROL_UA &&
-                    ua_frame[4] == FLAG){
-                        alarm(0);
-                        alarmEnabled = FALSE;
-                        printf("Connection established sucssfuly\n");
-                        return;
-                    }
-                    else{
-                        printf("Invalid UA frame\n");
-                    }
+                if(ua_frame[0] == FLAG &&
+                ua_frame[1] == ADDRESS_UA &&
+                ua_frame[2] == CONTROL_UA &&
+                ua_frame[4] == FLAG){
+                    alarm(0);
+                    alarmEnabled = FALSE;
+                    printf("Connection established sucssfuly\n");
+                    return;
+                } else {
+                    printf("Invalid UA frame\n");
+                }
+            } else {
+                    printf("Invalid UA frame\n");
             }
-            else {
-                printf("Invalid UA frame\n");
-            }
-            }
+           
+        }
+    }
+}
+void sendFrame(int fd, unsigned char buf[], unsigned size) {
+    //alarmCount = 0;
+    while (alarmCount < 5) {
+        if (alarmEnabled == FALSE) {
+            alarm(3); // Set alarm to be triggered in 3s
+            alarmEnabled = TRUE;
+            
+            // TODO: Byte Stuffing before writing
+            int bytes = write(fd, buf, size);
+            printf("%d bytes written\n", bytes);
+            sleep(1); // TODO: sleep less time. Maybe some ticks.
+            
+            unsigned char ua_frame[BUF_SIZE] = {0};
+            int bytes_read = read(fd,ua_frame, BUF_SIZE);
+            for (unsigned i = 0; i < bytes_read; i++) printf("Byte[%d]:%x\n",i,ua_frame[i]);
 
-
+            //if (bytes_read < 5) continue;
+           
+            if(ua_frame[3] == (ADDRESS_UA ^ CONTROL_UA) ){ // TODO: Verify if the aknowledgement is right
+                if(ua_frame[0] == FLAG &&
+                ua_frame[1] == ADDRESS_UA &&
+                ua_frame[2] == CONTROL_UA &&
+                ua_frame[4] == FLAG){
+                    alarm(0);
+                    alarmEnabled = FALSE;
+                    printf("Connection established sucssfuly\n");
+                    return;
+                } else {
+                    printf("Invalid UA frame\n");
+                }
+            } else {
+                    printf("Invalid UA frame\n");
+            }
+            
         }
     }
 }
@@ -167,7 +199,9 @@ int main(int argc, char *argv[])
     //buf[5] = '\n';
 
     unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS_SET,CONTROL_SET,ADDRESS_SET ^ CONTROL_SET,FLAG};
-    sendFrame(fd, set_frame,4,CONNECTION);
+    stablishConnection(fd, set_frame,5);
+    unsigned char frame[BUF_SIZE] = {FLAG,ADDRESS_SET,0x00,ADDRESS_SET ^ 0x00,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02, 0x00, FLAG};
+    sendFrame(fd, frame,14);
 
     // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)

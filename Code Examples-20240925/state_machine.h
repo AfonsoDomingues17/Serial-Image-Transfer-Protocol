@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 // Baudrate settings are defined in <asm/termbits.h>, which is
 // included by <termios.h>
@@ -25,15 +26,22 @@
 #define ADDRESS_UA 0x01
 #define CONTROL_SET 0x03
 #define CONTROL_UA 0x07
+#define CONTROL_0 0X00
+#define CONTROL_1 0x80
+#define ESC 0X7D
+
 
 typedef enum {
     START_STATE,
     FLAG_STATE,
     ADDRESS_STATE,
     CONTROL_STATE,
-    BCC_STATE,
+    BCC1_STATE,
+    DATA_STATE,
+    ESC_STATE,
+    FLAG2_STATE,
     STOP_STATE
-} stablishConnectionState;
+} frameState_t;
 
 
 /**
@@ -41,7 +49,7 @@ typedef enum {
  * 
  * @param fd
  */
-void stablishConnectionSender(int fd);
+int receiveI_frames(int fd, unsigned char frame[], unsigned frame_size, unsigned frame_n);
 
 /**
  * @brief State Machine to stablish connection (to be runned on receiver).
