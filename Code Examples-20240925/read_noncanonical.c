@@ -106,7 +106,14 @@ int main(int argc, char *argv[])
     printf("Connection stablished sussfully!\n");
     int bytes = write(fd, ua_frame, 5);
     if (bytes != 5) printf("Failed to send 5 bytes (UA frame).\n");
+
+    unsigned char frame[BUF_SIZE] = {0};
     
+    int size = receiveI_frames(fd,frame,BUF_SIZE,0);
+    for(unsigned i = 0; i < size;i++) printf("Byte[%d]: %02X\n",i,frame[i]);
+    bytes = write(fd, ua_frame, 5);
+    if (bytes != 5) printf("Failed to send 5 bytes (UA frame).\n");
+    //if qualquer que verifica se A trama que nos mandamos foi a mesma que ja tinhamos eviado 
 
     // The while() cycle should be changed in order to respect the specifications
     // of the protocol indicated in the Lab guide
