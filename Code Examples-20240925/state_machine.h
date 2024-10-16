@@ -22,12 +22,19 @@
 #define BUF_SIZE 1024
 
 #define FLAG 0x7E
-#define ADDRESS_SET 0x03
-#define ADDRESS_UA 0x01
-#define CONTROL_SET 0x03
-#define CONTROL_UA 0x07
-#define CONTROL_0 0X00
-#define CONTROL_1 0x80
+#define FLAG            0x7E
+#define ADDRESS_SNDR    0x03
+#define ADDRESS_RCVR    0x01
+
+#define CONTROL_SET     0x03
+#define CONTROL_UA      0x07
+#define CONTROL_RR0     0xAA
+#define CONTROL_RR1     0xAB
+#define CONTROL_REJ0    0x54
+#define CONTROL_REJ1    0x55
+#define CONTROL_DISC    0x0B
+#define CONTROL_B0 0X00
+#define CONTROL_B1 0x80
 #define ESC 0X7D
 
 
@@ -49,7 +56,7 @@ typedef enum {
  * 
  * @param fd
  */
-int receiveI_frames(int fd, unsigned char frame[], unsigned frame_size, unsigned frame_n);
+int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size, unsigned frame_n);
 
 /**
  * @brief State Machine to stablish connection (to be runned on receiver).

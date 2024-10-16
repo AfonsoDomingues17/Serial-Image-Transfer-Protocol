@@ -21,12 +21,19 @@
 #define TRUE 1
 
 #define BUF_SIZE 1024
+#define ASW_BUF_SIZE 5
 
-#define FLAG 0x7E
-#define ADDRESS_SET 0x03
-#define ADDRESS_UA 0x01
-#define CONTROL_SET 0x03
-#define CONTROL_UA 0x07
+#define FLAG            0x7E
+#define ADDRESS_SNDR    0x03
+#define ADDRESS_RCVR    0x01
+
+#define CONTROL_SET     0x03
+#define CONTROL_UA      0x07
+#define CONTROL_RR0     0xAA
+#define CONTROL_RR1     0xAB
+#define CONTROL_REJ0    0x54
+#define CONTROL_REJ1    0x55
+#define CONTROL_DISC    0x0B
 
 volatile int STOP = FALSE;
 
@@ -98,7 +105,11 @@ int main(int argc, char *argv[])
     printf("New termios structure set\n");
 
     // Loop for input
-    unsigned char ua_frame[BUF_SIZE] = {FLAG,ADDRESS_UA,CONTROL_UA,ADDRESS_UA ^ CONTROL_UA,FLAG};
+    unsigned char ua_frame[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_UA,ADDRESS_RCVR ^ CONTROL_UA,FLAG};
+    unsigned char rr_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_RR0,ADDRESS_RCVR ^ CONTROL_RR0, FLAG};
+    unsigned char rr_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_RR1,ADDRESS_RCVR ^ CONTROL_RR1, FLAG};
+
+    
 
     stablishConnectionReceiver(fd);
     // for(int i = 0; i < 5;i++) printf("%X ",set_frame[i]);
@@ -107,16 +118,21 @@ int main(int argc, char *argv[])
     int bytes = write(fd, ua_frame, 5);
     if (bytes != 5) printf("Failed to send 5 bytes (UA frame).\n");
 
-    unsigned char frame[BUF_SIZE] = {0};
-    
-    int size = receiveI_frames(fd,frame,BUF_SIZE,0);
-    for(unsigned i = 0; i < size;i++) printf("Byte[%d]: %02X\n",i,frame[i]);
-    bytes = write(fd, ua_frame, 5);
-    if (bytes != 5) printf("Failed to send 5 bytes (UA frame).\n");
-    //if qualquer que verifica se A trama que nos mandamos foi a mesma que ja tinhamos eviado 
+    bool finnished = false;
+    unsigned char expected_frame = 0;
+    while (!finnished) {
+        unsigned char frame[BUF_SIZE] = {0};
+        
+        int size = receiveI_frame(fd, frame,BUF_SIZE, expected_frame);
+        //printf("%d",size);
+        // for(unsigned i = 0; i < size;i++) printf("Byte[%d]: %02X\n",i,frame[i])
+        //if(frame[2] == ) bytes = write(fd,)
+        
+        bytes = write(fd, ua_frame, 5); // TODO: send the right answer frame instead of ua_frame
+        if (bytes != 5) printf("Failed to send 5 bytes (UA frame).\n");
 
-    // The while() cycle should be changed in order to respect the specifications
-    // of the protocol indicated in the Lab guide
+    }
+
 
     // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
