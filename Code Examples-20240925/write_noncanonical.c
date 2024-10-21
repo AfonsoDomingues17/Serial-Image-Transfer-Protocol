@@ -23,12 +23,21 @@
 #define TRUE 1
 
 #define BUF_SIZE 1024
+#define ASW_BUF_SIZE 5
 
-#define FLAG 0x7E
-#define ADDRESS_SNDR 0x03
-#define ADDRESS_RCVR 0x01
-#define CONTROL_SET 0x03
-#define CONTROL_UA 0x07
+#define FLAG            0x7E
+#define ADDRESS_SNDR    0x03
+#define ADDRESS_RCVR    0x01
+
+#define CONTROL_SET     0x03
+#define CONTROL_UA      0x07
+#define CONTROL_RR0     0xAA
+#define CONTROL_RR1     0xAB
+#define CONTROL_REJ0    0x54
+#define CONTROL_REJ1    0x55
+#define CONTROL_DISC    0x0B
+#define CONTROL_B0      0X00
+#define CONTROL_B1      0x80
 
 volatile int STOP = FALSE;
 
@@ -79,13 +88,13 @@ void stablishConnection(int fd, unsigned char buf[], unsigned size) {
                     printf("Invalid UA frame\n");
                 }
             } else {
-                    printf("Invalid UA frame\n");
+                printf("Invalid UA frame\n");
             }
-           
         }
     }
+    printf("TIMEOUT: Could not establish connection\n");
 }
-void sendFrame(int fd, unsigned char buf[], unsigned size) {
+void sendFrame(int fd, unsigned char buf[], unsigned size, unsigned char frame_n) {
     alarmCount = 0;
     
     // BYTE STUFFING:
@@ -102,40 +111,49 @@ void sendFrame(int fd, unsigned char buf[], unsigned size) {
     
     printf("Stuff done. Now, sending frame...\n");
 
+    unsigned char rr_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_RR0,ADDRESS_RCVR ^ CONTROL_RR0, FLAG};
+    unsigned char rr_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_RR1,ADDRESS_RCVR ^ CONTROL_RR1, FLAG};
+    unsigned char rej_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_REJ0,ADDRESS_RCVR ^ CONTROL_REJ0, FLAG};
+    unsigned char rej_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_REJ1,ADDRESS_RCVR ^ CONTROL_REJ1, FLAG};
+
     while (alarmCount < 5) {
         if (alarmEnabled == FALSE) {
             alarm(3); // Set alarm to be triggered in 3s
             alarmEnabled = TRUE;
             
-            // TODO: Byte Stuffing before writing
             int bytes = write(fd, stuffed_buf, j);
             printf("%d bytes written\n", bytes);
-            //sleep(1); // TODO: sleep less time. Maybe some ticks.
             
-            unsigned char ua_frame[BUF_SIZE] = {0};
-            int bytes_read = read(fd,ua_frame, BUF_SIZE);
-            for (unsigned i = 0; i < bytes_read; i++) printf("Byte[%d]:%x\n",i,ua_frame[i]);
+            unsigned char asw_frame[BUF_SIZE] = {0};
+            int bytes_read = read(fd, asw_frame, ASW_BUF_SIZE);
+            for (unsigned i = 0; i < bytes_read; i++) printf("Byte[%d]:%x\n",i,asw_frame[i]);
 
-            //if (bytes_read < 5) continue;
-           
-            if(ua_frame[3] == (ADDRESS_RCVR ^ CONTROL_UA) ){ // TODO: Verify if the aknowledgement is right
-                if(ua_frame[0] == FLAG &&
-                ua_frame[1] == ADDRESS_RCVR &&
-                ua_frame[2] == CONTROL_UA &&
-                ua_frame[4] == FLAG){
+            if (frame_n == 0) {
+                if (!memcmp(asw_frame, rr_0, 5)) {
                     alarm(0);
                     alarmEnabled = FALSE;
-                    printf("Connection established sucssfuly\n");
-                    return;
-                } else {
-                    printf("Invalid UA frame\n");
+                    return; // TODO: Maybe return 0
+                }
+                if (!memcmp(asw_frame, rej_0, 5)) {
+                    alarm(0);
+                    alarmEnabled = FALSE;
+                    continue; // The repeated frame will be sent right away.q
                 }
             } else {
-                    printf("Invalid UA frame\n");
+                if (!memcmp(asw_frame, rr_1, 5)) {
+                    alarm(0);
+                    alarmEnabled = FALSE;
+                    return; // TODO: Maybe return 0
+                }
+                if (!memcmp(asw_frame, rej_1, 5)) {
+                    alarm(0);
+                    alarmEnabled = FALSE;
+                    continue; // The repeated frame will be sent right away.q
+                }
             }
-            
         }
     }
+    printf("TIMEOUT: Could not send the frame\n");
 }
 
 int main(int argc, char *argv[])

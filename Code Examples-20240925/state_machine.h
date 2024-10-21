@@ -56,7 +56,7 @@ typedef enum {
  * 
  * @param fd
  */
-int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size, unsigned frame_n);
+int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size);
 
 /**
  * @brief State Machine to stablish connection (to be runned on receiver).

@@ -1,9 +1,8 @@
 #include "state_machine.h"
 
-int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size, unsigned frame_n){
-    if(frame_n != 0 && frame_n != 1) return -1;
+int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size){
+    // if(frame_n != 0 && frame_n != 1) return -1; // return value -1 is used when bcc2 is wrong
     printf("Entrei na leitura\n");
-    bool duplicate = false;
 
     frameState_t state = START_STATE;
     unsigned i = 0;
@@ -39,16 +38,12 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size, unsigned 
                 break;
             
             case ADDRESS_STATE:
-                if ((byte_read == CONTROL_B0 && frame_n == 0) || (byte_read == CONTROL_B1 && frame_n == 1)) {
+                if ((byte_read == CONTROL_B0) || (byte_read == CONTROL_B1)) {
                     state = CONTROL_STATE;
                     frame[i] = byte_read;
                     i++;
                     //printf("Control received\n");
-                } else if ((byte_read == CONTROL_B0 && frame_n == 1) || (byte_read == CONTROL_B1 && frame_n == 0)) {
-                    duplicate = true;
-                    frame[i] = byte_read;
-                    i++;
-                    //printf("Nao devias estar aqui\n");
+                
                 } else if (byte_read == FLAG) {
                     state = FLAG_STATE;
                     i = 1;
@@ -73,7 +68,8 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size, unsigned 
                 } else {
                     state = START_STATE;
                     i = 0;
-                    //printf("Back to start from control\n");
+                    printf("Back to start from control\n"); //TODO descarta
+                    // TODO: return an error.
                 }
                 break;
             
@@ -121,8 +117,8 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size, unsigned 
                 } else {
                     i = 0;
                     state = START_STATE;
-                    // TODO: return error
-                    //printf("BCC wrong: going back to start state"); // TODO: send reject frame
+                    printf("BCC2 wrong: going back to start state"); 
+                    return -1;
                 }
                 break;
             
@@ -131,7 +127,6 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size, unsigned 
         }
     }
 
-    if (duplicate) return 0;
     return i;
 }
 
