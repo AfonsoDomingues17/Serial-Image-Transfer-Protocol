@@ -34,6 +34,8 @@
 #define CONTROL_REJ0    0x54
 #define CONTROL_REJ1    0x55
 #define CONTROL_DISC    0x0B
+#define CONTROL_B0      0X00
+#define CONTROL_B1      0x80
 
 volatile int STOP = FALSE;
 
@@ -108,6 +110,8 @@ int main(int argc, char *argv[])
     unsigned char ua_frame[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_UA,ADDRESS_RCVR ^ CONTROL_UA,FLAG};
     unsigned char rr_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_RR0,ADDRESS_RCVR ^ CONTROL_RR0, FLAG};
     unsigned char rr_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_RR1,ADDRESS_RCVR ^ CONTROL_RR1, FLAG};
+    unsigned char rej_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_REJ0,ADDRESS_RCVR ^ CONTROL_REJ0, FLAG};
+    unsigned char rej_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_REJ1,ADDRESS_RCVR ^ CONTROL_REJ1, FLAG};
 
     
 
@@ -120,16 +124,40 @@ int main(int argc, char *argv[])
 
     bool finnished = false;
     unsigned char expected_frame = 0;
-    while (!finnished) {
+    
+    while (!finnished) { // Read a frame each itteration. Ler a imagem toda.
         unsigned char frame[BUF_SIZE] = {0};
         
-        int size = receiveI_frame(fd, frame,BUF_SIZE, expected_frame);
+        int size = receiveI_frame(fd, frame,BUF_SIZE);
+
+        if (size == -2) {
+            printf("ERROR: Allocated buffer is too small.\n");
+            exit(1);
+        } else if (frame[2] == CONTROL_B0 && expected_frame == 0) {
+            bytes = write(fd,rr_1,5);
+            expected_frame = 1;
+        } else if (frame[2] == CONTROL_B1 && expected_frame == 1) {
+            bytes = write(fd,rr_0,5);
+            expected_frame = 0;
+        } else if (frame[2] == CONTROL_B1) { //duplicated I1
+            bytes = write(fd,rr_0,5);
+            expected_frame = 0;
+        } else if (frame[2] == CONTROL_B0) { //duplicated I0
+            bytes = write(fd,rr_1,5);
+            expected_frame = 1;
+        } else if (size == -1) { // BCC2 WRONG!
+            if (frame[2] == CONTROL_B0) {
+                bytes = write(fd,rej_0,5);
+                expected_frame = 0;
+            } else {
+                bytes = write(fd,rej_1,5);
+                expected_frame = 1;
+            }
+        }
+
+        
         //printf("%d",size);
         // for(unsigned i = 0; i < size;i++) printf("Byte[%d]: %02X\n",i,frame[i])
-        //if(frame[2] == ) bytes = write(fd,)
-        
-        bytes = write(fd, ua_frame, 5); // TODO: send the right answer frame instead of ua_frame
-        if (bytes != 5) printf("Failed to send 5 bytes (UA frame).\n");
 
     }
 
