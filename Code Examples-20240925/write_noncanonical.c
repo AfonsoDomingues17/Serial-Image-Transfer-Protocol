@@ -52,10 +52,6 @@ void alarmHandler(int signal)
     printf("Alarm #%d\n", alarmCount);
 }
 
-typedef enum {
-    SEND_0,
-    SEND_1
-} frame_t;
 
 void stablishConnection(int fd, unsigned char buf[], unsigned size) {
     alarmCount = 0;
@@ -111,10 +107,6 @@ void sendFrame(int fd, unsigned char buf[], unsigned size, unsigned char frame_n
     
     printf("Stuff done. Now, sending frame...\n");
 
-    unsigned char rr_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_RR0,ADDRESS_RCVR ^ CONTROL_RR0, FLAG};
-    unsigned char rr_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_RR1,ADDRESS_RCVR ^ CONTROL_RR1, FLAG};
-    unsigned char rej_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_REJ0,ADDRESS_RCVR ^ CONTROL_REJ0, FLAG};
-    unsigned char rej_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_REJ1,ADDRESS_RCVR ^ CONTROL_REJ1, FLAG};
 
     while (alarmCount < 5) {
         if (alarmEnabled == FALSE) {
@@ -129,26 +121,51 @@ void sendFrame(int fd, unsigned char buf[], unsigned size, unsigned char frame_n
             for (unsigned i = 0; i < bytes_read; i++) printf("Byte[%d]:%x\n",i,asw_frame[i]);
 
             if (frame_n == 0) {
-                if (!memcmp(asw_frame, rr_0, 5)) {
-                    alarm(0);
-                    alarmEnabled = FALSE;
-                    return; // TODO: Maybe return 0
+                if(asw_frame[3] == (ADDRESS_RCVR ^ CONTROL_RR1) ){
+                    if(asw_frame[0] == FLAG &&
+                    asw_frame[1] == ADDRESS_RCVR &&
+                    asw_frame[2] == CONTROL_RR1 &&
+                    asw_frame[4] == FLAG){
+                        alarm(0);
+                        alarmEnabled = FALSE;
+                        printf("Packet Well transmited\n");
+                        return;
+                    }
                 }
-                if (!memcmp(asw_frame, rej_0, 5)) {
-                    alarm(0);
-                    alarmEnabled = FALSE;
-                    continue; // The repeated frame will be sent right away.q
+                if(asw_frame[3] == (ADDRESS_RCVR ^ CONTROL_REJ0) ){
+                    if(asw_frame[0] == FLAG &&
+                    asw_frame[1] == ADDRESS_RCVR &&
+                    asw_frame[2] == CONTROL_REJ0 &&
+                    asw_frame[4] == FLAG){
+                        alarm(0);
+                        alarmEnabled = FALSE;
+                        printf("Packet rejected - retrasmiting\n");
+                        continue;
+                    }
                 }
+                
             } else {
-                if (!memcmp(asw_frame, rr_1, 5)) {
-                    alarm(0);
-                    alarmEnabled = FALSE;
-                    return; // TODO: Maybe return 0
+                if(asw_frame[3] == (ADDRESS_RCVR ^ CONTROL_RR0) ){
+                    if(asw_frame[0] == FLAG &&
+                    asw_frame[1] == ADDRESS_RCVR &&
+                    asw_frame[2] == CONTROL_RR0 &&
+                    asw_frame[4] == FLAG){
+                        alarm(0);
+                        alarmEnabled = FALSE;
+                        printf("Packet Well transmited\n");
+                        return;
+                    }
                 }
-                if (!memcmp(asw_frame, rej_1, 5)) {
-                    alarm(0);
-                    alarmEnabled = FALSE;
-                    continue; // The repeated frame will be sent right away.q
+                if(asw_frame[3] == (ADDRESS_RCVR ^ CONTROL_REJ1) ){
+                    if(asw_frame[0] == FLAG &&
+                    asw_frame[1] == ADDRESS_RCVR &&
+                    asw_frame[2] == CONTROL_REJ1 &&
+                    asw_frame[4] == FLAG){
+                        alarm(0);
+                        alarmEnabled = FALSE;
+                        printf("Packet rejected - retrasmiting\n");
+                        continue;
+                    }
                 }
             }
         }
@@ -232,8 +249,8 @@ int main(int argc, char *argv[])
     unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_SET,ADDRESS_SNDR ^ CONTROL_SET,FLAG};
     stablishConnection(fd, set_frame,5);
     
-    unsigned char frame[BUF_SIZE] = {FLAG,ADDRESS_SNDR,0x00,ADDRESS_SNDR ^ 0x00,0x02,FLAG,0x02,0x02,0x02,0x02,0x02,0x02, 0x7c, FLAG};
-    sendFrame(fd, frame,14);
+    unsigned char frame[BUF_SIZE] = {FLAG,ADDRESS_SNDR,0x00,ADDRESS_SNDR ^ 0x00,0x02,FLAG,0x02,0x02,0x02,0x02,0x02,0x02, 0x00, FLAG};
+    sendFrame(fd, frame,14,0);
 
     // Restore the old port setting
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)

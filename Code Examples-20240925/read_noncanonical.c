@@ -38,7 +38,9 @@
 #define CONTROL_B1      0x80
 
 volatile int STOP = FALSE;
+int alarmEnabled = FALSE;
 
+int alarmCount;
 
 int main(int argc, char *argv[])
 {
@@ -122,44 +124,45 @@ int main(int argc, char *argv[])
     int bytes = write(fd, ua_frame, 5);
     if (bytes != 5) printf("Failed to send 5 bytes (UA frame).\n");
 
-    bool finnished = false;
+    //bool finnished = false;
     unsigned char expected_frame = 0;
     
-    while (!finnished) { // Read a frame each itteration. Ler a imagem toda.
-        unsigned char frame[BUF_SIZE] = {0};
-        
-        int size = receiveI_frame(fd, frame,BUF_SIZE);
+    //while (!finnished) { // Read a frame each itteration. Ler a imagem toda.
+    unsigned char frame[BUF_SIZE] = {0};
 
-        if (size == -2) {
-            printf("ERROR: Allocated buffer is too small.\n");
-            exit(1);
-        } else if (frame[2] == CONTROL_B0 && expected_frame == 0) {
-            bytes = write(fd,rr_1,5);
-            expected_frame = 1;
-        } else if (frame[2] == CONTROL_B1 && expected_frame == 1) {
-            bytes = write(fd,rr_0,5);
+    int size = receiveI_frame(fd, frame,BUF_SIZE);
+
+    if (size == -2) {
+        printf("ERROR: Allocated buffer is too small.\n");
+        exit(1);
+
+    } else if (size == -1) { // BCC2 WRONG!
+        if (frame[2] == CONTROL_B0) {
+            bytes = write(fd,rej_0,5);
             expected_frame = 0;
-        } else if (frame[2] == CONTROL_B1) { //duplicated I1
-            bytes = write(fd,rr_0,5);
-            expected_frame = 0;
-        } else if (frame[2] == CONTROL_B0) { //duplicated I0
-            bytes = write(fd,rr_1,5);
+        } else {
+            bytes = write(fd,rej_1,5);
             expected_frame = 1;
-        } else if (size == -1) { // BCC2 WRONG!
-            if (frame[2] == CONTROL_B0) {
-                bytes = write(fd,rej_0,5);
-                expected_frame = 0;
-            } else {
-                bytes = write(fd,rej_1,5);
-                expected_frame = 1;
-            }
         }
+    }else if (frame[2] == CONTROL_B0 && expected_frame == 0) {
+        bytes = write(fd,rr_1,5);
+        expected_frame = 1;
+    } else if (frame[2] == CONTROL_B1 && expected_frame == 1) {
+        bytes = write(fd,rr_0,5);
+        expected_frame = 0;
+    } else if (frame[2] == CONTROL_B1) { //duplicated I1
+        bytes = write(fd,rr_0,5);
+        expected_frame = 0;
+    } else if (frame[2] == CONTROL_B0) { //duplicated I0
+        bytes = write(fd,rr_1,5);
+        expected_frame = 1;
+    } 
 
         
         //printf("%d",size);
         // for(unsigned i = 0; i < size;i++) printf("Byte[%d]: %02X\n",i,frame[i])
 
-    }
+    //}
 
 
     // Restore the old port settings

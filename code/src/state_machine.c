@@ -16,7 +16,7 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size){
 
         switch (state) {
             case START_STATE:
-                printf("First flag received\n");
+                //printf("First flag received\n");
                 if(byte_read == FLAG){
                     state = FLAG_STATE;
                     frame[i] = byte_read;
@@ -29,11 +29,11 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size){
                     state = ADDRESS_STATE;
                     frame[i] = byte_read;
                     i++;
-                    printf("Adress received\n");
+                    //printf("Adress received\n");
                 } else if (byte_read != FLAG) {
                     state = START_STATE;
                     i = 0;
-                    printf("Back to start :(\n");
+                    //printf("Back to start :(\n");
                 }
                 break;
             
@@ -42,16 +42,16 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size){
                     state = CONTROL_STATE;
                     frame[i] = byte_read;
                     i++;
-                    printf("Control received\n");
+                    //printf("Control received\n");
                 
                 } else if (byte_read == FLAG) {
                     state = FLAG_STATE;
                     i = 1;
-                    printf("Flag received instead of control\n");
+                    //printf("Flag received instead of control\n");
                 } else {
                     state = START_STATE;
                     i = 0;
-                    printf("Back to start from address\n");
+                    //printf("Back to start from address\n");
                 }
                 break;
             
@@ -60,27 +60,28 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size){
                     state = BCC1_STATE;
                     frame[i] = byte_read;
                     i++;
-                    printf("BCC received\n");
+                    //printf("BCC received\n");
                 } else if (byte_read == FLAG) {
                     state = FLAG_STATE;
                     i = 1;
-                    printf("Flag received instead of BCC\n");
+                    //printf("Flag received instead of BCC\n");
                 } else {
                     state = START_STATE;
                     i = 0;
-                    printf("Back to start from control\n"); 
+                    printf("Back to start from control\n"); //TODO descarta
+                    // TODO: return an error.
                 }
                 break;
             
             case BCC1_STATE:
                 if (byte_read == ESC) {
                     state = ESC_STATE;
-                    printf("ESC read\n");
+                    //printf("ESC read\n");
                 } else {
                     state = DATA_STATE;
                     frame[i] = byte_read;
                     i++;
-                    printf("Data bytes\n");
+                    //printf("All the way to the start from BCC\n");
                 }
                 break;
 
@@ -88,7 +89,7 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size){
                 frame[i] = (byte_read ^ 0x20); //destuffing
                 i++;
                 state = DATA_STATE;
-                printf("Destuffing\n");
+                //printf("Destuffing\n");
                 break;
 
             case DATA_STATE:
@@ -96,14 +97,14 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size){
                     state = FLAG2_STATE;
                     frame[i] = byte_read;
                     i++;
-                    printf("Read Flag going to end\n");
+                    //printf("Read Flag going to end\n");
                 } else if (byte_read == ESC) {
                     state = ESC_STATE;
-                    printf("ESC read\n");
+                    //printf("ESC read\n");
                 } else { // Read normal data
                     frame[i] = byte_read;
                     i++;
-                    printf("Read normal data byte\n");
+                    //printf("Read normal data byte\n");
                 }
                 break;
 
@@ -112,7 +113,7 @@ int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size){
                 for (unsigned v = 5; v < (i-2); v++) bcc ^= frame[v];
                 if (bcc == frame[(i-2)]){
                     state = STOP_STATE;
-                    printf("BCC2 okay -- procedded to stop\n");
+                    //printf("BCC2 okay -- procedded to stop\n");
                 } else {
                     i = 0;
                     state = START_STATE;
