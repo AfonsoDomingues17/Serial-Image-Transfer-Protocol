@@ -118,16 +118,13 @@ int main(int argc, char *argv[])
     
 
     stablishConnectionReceiver(fd);
-    // for(int i = 0; i < 5;i++) printf("%X ",set_frame[i]);
-    // printf("\n");
+    
     printf("Connection stablished sussfully!\n");
     int bytes = write(fd, ua_frame, 5);
     if (bytes != 5) printf("Failed to send 5 bytes (UA frame).\n");
 
-    //bool finnished = false;
     unsigned char expected_frame = 0;
     
-    //while (!finnished) { // Read a frame each itteration. Ler a imagem toda.
     unsigned char frame[BUF_SIZE] = {0};
 
     int size = receiveI_frame(fd, frame,BUF_SIZE);
@@ -159,10 +156,7 @@ int main(int argc, char *argv[])
     } 
 
         
-        //printf("%d",size);
-        // for(unsigned i = 0; i < size;i++) printf("Byte[%d]: %02X\n",i,frame[i])
-
-    //}
+       
 
 
     // Restore the old port settings
