@@ -63,7 +63,6 @@ void stablishConnection(int fd, unsigned char buf[], unsigned size) {
             
             int bytes = write(fd, buf, size);
             printf("%d bytes written\n", bytes);
-            sleep(1); // TODO: sleep less time. Maybe some ticks.
             
             unsigned char ua_frame[BUF_SIZE] = {0};
             int bytes_read = read(fd,ua_frame, BUF_SIZE);
