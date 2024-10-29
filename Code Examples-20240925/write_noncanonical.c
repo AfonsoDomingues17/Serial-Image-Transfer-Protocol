@@ -23,12 +23,21 @@
 #define TRUE 1
 
 #define BUF_SIZE 1024
+#define ASW_BUF_SIZE 5
 
-#define FLAG 0x7E
-#define ADDRESS_SET 0x03
-#define ADDRESS_UA 0x01
-#define CONTROL_SET 0x03
-#define CONTROL_UA 0x07
+#define FLAG            0x7E
+#define ADDRESS_SNDR    0x03
+#define ADDRESS_RCVR    0x01
+
+#define CONTROL_SET     0x03
+#define CONTROL_UA      0x07
+#define CONTROL_RR0     0xAA
+#define CONTROL_RR1     0xAB
+#define CONTROL_REJ0    0x54
+#define CONTROL_REJ1    0x55
+#define CONTROL_DISC    0x0B
+#define CONTROL_B0      0X00
+#define CONTROL_B1      0x80
 
 volatile int STOP = FALSE;
 
@@ -43,13 +52,10 @@ void alarmHandler(int signal)
     printf("Alarm #%d\n", alarmCount);
 }
 
-typedef enum {
-    SEND_0,
-    SEND_1
-} frame_t;
 
 void stablishConnection(int fd, unsigned char buf[], unsigned size) {
-    //alarmCount = 0;
+    alarmCount = 0;
+
     while (alarmCount < 5) {
         if (alarmEnabled == FALSE) {
             alarm(3); // Set alarm to be triggered in 3s
@@ -57,7 +63,6 @@ void stablishConnection(int fd, unsigned char buf[], unsigned size) {
             
             int bytes = write(fd, buf, size);
             printf("%d bytes written\n", bytes);
-            sleep(1); // TODO: sleep less time. Maybe some ticks.
             
             unsigned char ua_frame[BUF_SIZE] = {0};
             int bytes_read = read(fd,ua_frame, BUF_SIZE);
@@ -65,9 +70,9 @@ void stablishConnection(int fd, unsigned char buf[], unsigned size) {
 
             //if (bytes_read < 5) continue;
             
-            if(ua_frame[3] == (ADDRESS_UA ^ CONTROL_UA) ){
+            if(ua_frame[3] == (ADDRESS_RCVR ^ CONTROL_UA) ){
                 if(ua_frame[0] == FLAG &&
-                ua_frame[1] == ADDRESS_UA &&
+                ua_frame[1] == ADDRESS_RCVR &&
                 ua_frame[2] == CONTROL_UA &&
                 ua_frame[4] == FLAG){
                     alarm(0);
@@ -78,48 +83,93 @@ void stablishConnection(int fd, unsigned char buf[], unsigned size) {
                     printf("Invalid UA frame\n");
                 }
             } else {
-                    printf("Invalid UA frame\n");
+                printf("Invalid UA frame\n");
             }
-           
         }
     }
+    printf("TIMEOUT: Could not establish connection\n");
 }
-void sendFrame(int fd, unsigned char buf[], unsigned size) {
-    //alarmCount = 0;
+void sendFrame(int fd, unsigned char buf[], unsigned size, unsigned char frame_n) {
+    alarmCount = 0;
+    
+    // BYTE STUFFING:
+    unsigned char stuffed_buf[BUF_SIZE * 2] = {0};
+    unsigned i = 0, j = 0;
+    for (; i < 4; i++) stuffed_buf[j++] = buf[i];
+    for (; i < size - 1; i++) {
+        if (buf[i] == FLAG || buf[i] == ESC) {
+            stuffed_buf[j++] = ESC;
+            stuffed_buf[j++] = buf[i] ^ 0x20;
+        }
+        else stuffed_buf[j++] = buf[i];
+    }
+    
+    printf("Stuff done. Now, sending frame...\n");
+
+
     while (alarmCount < 5) {
         if (alarmEnabled == FALSE) {
             alarm(3); // Set alarm to be triggered in 3s
             alarmEnabled = TRUE;
             
-            // TODO: Byte Stuffing before writing
-            int bytes = write(fd, buf, size);
+            int bytes = write(fd, stuffed_buf, j);
             printf("%d bytes written\n", bytes);
-            sleep(1); // TODO: sleep less time. Maybe some ticks.
             
-            unsigned char ua_frame[BUF_SIZE] = {0};
-            int bytes_read = read(fd,ua_frame, BUF_SIZE);
-            for (unsigned i = 0; i < bytes_read; i++) printf("Byte[%d]:%x\n",i,ua_frame[i]);
+            unsigned char asw_frame[BUF_SIZE] = {0};
+            int bytes_read = read(fd, asw_frame, ASW_BUF_SIZE);
+            for (unsigned i = 0; i < bytes_read; i++) printf("Byte[%d]:%x\n",i,asw_frame[i]);
 
-            //if (bytes_read < 5) continue;
-           
-            if(ua_frame[3] == (ADDRESS_UA ^ CONTROL_UA) ){ // TODO: Verify if the aknowledgement is right
-                if(ua_frame[0] == FLAG &&
-                ua_frame[1] == ADDRESS_UA &&
-                ua_frame[2] == CONTROL_UA &&
-                ua_frame[4] == FLAG){
-                    alarm(0);
-                    alarmEnabled = FALSE;
-                    printf("Connection established sucssfuly\n");
-                    return;
-                } else {
-                    printf("Invalid UA frame\n");
+            if (frame_n == 0) {
+                if(asw_frame[3] == (ADDRESS_RCVR ^ CONTROL_RR1) ){
+                    if(asw_frame[0] == FLAG &&
+                    asw_frame[1] == ADDRESS_RCVR &&
+                    asw_frame[2] == CONTROL_RR1 &&
+                    asw_frame[4] == FLAG){
+                        alarm(0);
+                        alarmEnabled = FALSE;
+                        printf("Packet Well transmited\n");
+                        return;
+                    }
                 }
+                if(asw_frame[3] == (ADDRESS_RCVR ^ CONTROL_REJ0) ){
+                    if(asw_frame[0] == FLAG &&
+                    asw_frame[1] == ADDRESS_RCVR &&
+                    asw_frame[2] == CONTROL_REJ0 &&
+                    asw_frame[4] == FLAG){
+                        alarm(0);
+                        alarmEnabled = FALSE;
+                        printf("Packet rejected - retrasmiting\n");
+                        continue;
+                    }
+                }
+                
             } else {
-                    printf("Invalid UA frame\n");
+                if(asw_frame[3] == (ADDRESS_RCVR ^ CONTROL_RR0) ){
+                    if(asw_frame[0] == FLAG &&
+                    asw_frame[1] == ADDRESS_RCVR &&
+                    asw_frame[2] == CONTROL_RR0 &&
+                    asw_frame[4] == FLAG){
+                        alarm(0);
+                        alarmEnabled = FALSE;
+                        printf("Packet Well transmited\n");
+                        return;
+                    }
+                }
+                if(asw_frame[3] == (ADDRESS_RCVR ^ CONTROL_REJ1) ){
+                    if(asw_frame[0] == FLAG &&
+                    asw_frame[1] == ADDRESS_RCVR &&
+                    asw_frame[2] == CONTROL_REJ1 &&
+                    asw_frame[4] == FLAG){
+                        alarm(0);
+                        alarmEnabled = FALSE;
+                        printf("Packet rejected - retrasmiting\n");
+                        continue;
+                    }
+                }
             }
-            
         }
     }
+    printf("TIMEOUT: Could not send the frame\n");
 }
 
 int main(int argc, char *argv[])
@@ -190,20 +240,18 @@ int main(int argc, char *argv[])
 
     (void)signal(SIGALRM, alarmHandler);
 
-
-
-
     // In non-canonical mode, '\n' does not end the writing.
     // Test this condition by placing a '\n' in the middle of the buffer.
     // The whole buffer must be sent even with the '\n'.
     //buf[5] = '\n';
 
-    unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS_SET,CONTROL_SET,ADDRESS_SET ^ CONTROL_SET,FLAG};
+    unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_SET,ADDRESS_SNDR ^ CONTROL_SET,FLAG};
     stablishConnection(fd, set_frame,5);
-    unsigned char frame[BUF_SIZE] = {FLAG,ADDRESS_SET,0x00,ADDRESS_SET ^ 0x00,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02, 0x00, FLAG};
-    sendFrame(fd, frame,14);
+    
+    unsigned char frame[BUF_SIZE] = {FLAG,ADDRESS_SNDR,0x00,ADDRESS_SNDR ^ 0x00,0x02,FLAG,0x02,0x02,0x02,0x02,0x02,0x02, 0x00, FLAG};
+    sendFrame(fd, frame,14,0);
 
-    // Restore the old port settings
+    // Restore the old port setting
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
     {
         perror("tcsetattr");
