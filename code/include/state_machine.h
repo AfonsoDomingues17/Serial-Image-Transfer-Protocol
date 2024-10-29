@@ -50,19 +50,4 @@ typedef enum {
     STOP_STATE
 } frameState_t;
 
-
-/**
- * @brief State Machine to stablish connection (to be runned on sender).
- * 
- * @param fd
- */
-int receiveI_frame(int fd, unsigned char frame[], unsigned frame_size);
-
-/**
- * @brief State Machine to stablish connection (to be runned on receiver).
- * 
- * @param fd
- */
-void stablishConnectionReceiver(int fd);
-
 #endif // _STATE_MACHINE_H_
