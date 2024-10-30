@@ -126,7 +126,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         
         case LlRx: {
             int ctrl_size = llread(packet);
-            for(int i = 0; i < ctrl_size; i++) printf("INFO: Byte[%d]:%x\n",i,packet[i]);
             if (ctrl_size == -1) {
                 printf("ERROR: Unable to read Control Packet from link layer.\n");
                 exit(1);
@@ -137,10 +136,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             for(unsigned i = 0; i < 8; i++) {
                 fileSize += packet[3 + i] << 8 * (8 - i - 1);
             }
-           
-            char oldFileName[256] = {0};
-            memcpy(&oldFileName, &packet[3 + 8 + 2],packet[3 + 8 + 1]);
-            printf("INFO: Filename=\"%s\"\n", oldFileName); // TODO: Do something with the old filename. Maybe print it in the final statistics alongside the file size.
+
             FILE * new_file = fopen(filename,"w");
             
             while (TRUE) {
@@ -167,7 +163,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         printf("ERROR: Unable to close serial port\n");
         exit(1);
     }
-    printf("INFO: Serial port succssefully closed!\n");
+    printf("INFO: Serial port successfully closed!\n");
     
     return;
 
