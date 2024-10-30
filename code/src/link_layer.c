@@ -29,9 +29,11 @@ unsigned char rr_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_RR0,ADDRESS_SNDR ^
 unsigned char rr_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_RR1,ADDRESS_SNDR ^ CONTROL_RR1, FLAG};
 unsigned char rej_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_REJ0,ADDRESS_SNDR ^ CONTROL_REJ0, FLAG};
 unsigned char rej_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_REJ1,ADDRESS_SNDR ^ CONTROL_REJ1, FLAG};
-unsigned char disc_frame[BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_DISC,ADDRESS_SNDR ^ CONTROL_DISC,FLAG};
+unsigned char disc_frame_sndr[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_DISC,ADDRESS_SNDR ^ CONTROL_DISC,FLAG};
+unsigned char disc_frame_rcvr[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_DISC,ADDRESS_RCVR ^ CONTROL_DISC,FLAG};
 unsigned char ua_frame[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_UA,ADDRESS_SNDR ^ CONTROL_UA,FLAG};
-unsigned char set_frame[BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_SET,ADDRESS_SNDR ^ CONTROL_SET,FLAG};
+unsigned char ua_frame_disc[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_UA,ADDRESS_RCVR ^ CONTROL_UA,FLAG};
+unsigned char set_frame[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_SET,ADDRESS_SNDR ^ CONTROL_SET,FLAG};
 
 volatile int STOP = FALSE;
 
@@ -48,7 +50,7 @@ void alarmHandler(int signal)
 {
     alarmEnabled = FALSE;
     alarmCount++;
-    printf("Alarm #%d\n", alarmCount);
+    printf("Alarm #%d\n", alarmCount); // TODO: Maybe remove this?? Also, show the number of alarms handled in the final statistics
 }
 
 // TODO: STORE STATISTICS
@@ -78,8 +80,8 @@ int llopen(LinkLayer connectionParameters) {
                     alarm(timeout); // Set alarm to be triggered in 3s
                     alarmEnabled = TRUE;
                     
-                    int bytes = writeBytesSerialPort(set_frame, 5);
-                    printf("%d bytes written\n", bytes);
+                    int bytes = writeBytesSerialPort(set_frame, ASW_BUF_SIZE);
+                    printf("INFO: %d bytes written\n", bytes);
                     
                     frameState_t state = START_STATE;
                     while (alarmEnabled != FALSE && state != STOP_STATE) {
@@ -139,7 +141,7 @@ int llopen(LinkLayer connectionParameters) {
                                     state = STOP_STATE;
                                     alarm(0);
                                     alarmEnabled = FALSE;
-                                    printf("Connection established sucssfuly\n");
+                                    printf("INFO: Connection established sucssfuly\n");
                                     frame_n = 0;
                                     return 1;
                                 }
@@ -153,7 +155,7 @@ int llopen(LinkLayer connectionParameters) {
                                 break;
                         }
                     }
-                    printf("Should be here when alarm rings\n");
+                    // printf("Should be here when alarm rings\n"); // DEBUG
                 }
             }
             printf("TIMEOUT: Could not establish connection\n");
@@ -227,9 +229,9 @@ int llopen(LinkLayer connectionParameters) {
                         break;
                 }
             }
-            printf("Connection stablished sussfully!\n");
+            printf("INFO: Connection stablished sussfully!\n");
             int bytes = writeBytesSerialPort(ua_frame,ASW_BUF_SIZE);
-            if (bytes != 5) printf("Failed to send 5 bytes (UA frame).\n");
+            if (bytes != 5) printf("ERROR: Failed to send 5 bytes (UA frame).\n");
             frame_n = 0;
             return 1;
             break;
@@ -288,7 +290,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
             is_rej = false;
             
             int bytes = writeBytesSerialPort(stuffed_buf,j);
-            printf("%d bytes written\n", bytes);
+            printf("INFO: %d bytes written\n", bytes);
             
             //nsigned char asw_frame[BUF_SIZE] = {0};
             //int bytes_read = read(fd, asw_frame, ASW_BUF_SIZE);
@@ -383,12 +385,12 @@ int llwrite(const unsigned char *buf, int bufSize) {
                 alarm(0);
                 alarmEnabled = FALSE;
                 nRetransmitions--;
-                printf("Packet rejected - retrasmiting\n");
+                printf("INFO: Frame rejected - retrasmiting\n"); // TODO: Is this print necessary? 
                 continue;
             } else if (!is_rej && state == STOP_STATE) {
                 alarm(0);
                 alarmEnabled = FALSE;
-                printf("Packet Well transmited\n");
+                printf("INFO: Frame Well transmited\n");
                 if(frame_n == 0) frame_n = 1;
                 else frame_n = 0;
                 if (j < 7) return j;
@@ -398,7 +400,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
         }
         
     }
-    if (is_rej) printf("NUMBER OF RETRANSMISSIONS EXCEDDED!\n");
+    if (is_rej) printf("ERROR: Number of retransmissions exxceeded!\n");
     else printf("TIMEOUT: Could not send the frame\n");
 
     return -1;
@@ -556,46 +558,46 @@ int llread(unsigned char *packet) {
 
             }else if(size == 5){ //Received a SET send a UA_FRAME
                 bytes = writeBytesSerialPort(ua_frame,ASW_BUF_SIZE);
-                printf("Sent UA\n");
+                // printf("Sent UA\n");
                 size = 0;
             } 
             else if (size == -1) { // BCC2 WRONG!
                 if (control == CONTROL_B0) {
                     bytes = writeBytesSerialPort(rej_0,ASW_BUF_SIZE);
                     frame_n = 0;
-                    printf("Sent rej0\n");
+                    // printf("Sent rej0\n");
                     state = START_STATE;
                 } else {
                     bytes = writeBytesSerialPort(rej_1,ASW_BUF_SIZE);
                     frame_n = 1;
-                    printf("Sent rej1\n");
+                    // printf("Sent rej1\n");
                     state = START_STATE;
                 }
             } else if (control == CONTROL_B0 && frame_n == 0) {
                 bytes = writeBytesSerialPort(rr_1,ASW_BUF_SIZE);
                 frame_n = 1;
-                printf("Sent RR1\n");
+                // printf("Sent RR1\n");
             } else if (control == CONTROL_B1 && frame_n == 1) {
                 bytes = writeBytesSerialPort(rr_0,ASW_BUF_SIZE);
                 frame_n = 0;
-                printf("Sent RR0\n");
+                // printf("Sent RR0\n");
                 
             } else if (control == CONTROL_B1) { //duplicated I1
                 bytes = writeBytesSerialPort(rr_0,ASW_BUF_SIZE);
                 frame_n = 0;
-                printf("Sent nothing - duplicate discard\n");
+                // printf("Sent nothing - duplicate discard\n");
                 state = START_STATE;
 
             } else if (control == CONTROL_B0) { //duplicated I0
                 bytes = writeBytesSerialPort(rr_1,ASW_BUF_SIZE);
                 frame_n = 1;
-                printf("Sent nothing - duplicate discard\n");
+                // printf("Sent nothing - duplicate discard\n");
                 state = START_STATE;
             }
         }
     }
-    printf("Bytes sent in answer:%d\n",bytes);
-    printf("tamanho do packet lido:%d\n",size);
+    printf("INFO: Bytes sent in answer:%d\n",bytes);
+    printf("INFO: Read packet size:%d\n",size);
  
     return size;
 }
@@ -612,97 +614,9 @@ int llclose(int showStatistics) {
 
     switch (role) {
         case LlRx:
-            
-            while (alarmCount < 5) {
-                if (alarmEnabled == FALSE) {
-                    alarm(timeout); // Set alarm to be triggered in timeout seconds
-                    alarmEnabled = TRUE;
-                    
-                    int bytes = writeBytesSerialPort(disc_frame, ASW_BUF_SIZE);
-                    printf("%d bytes written\n", bytes);
-                    
-                    frameState_t state = START_STATE;
-                    while (alarmEnabled != FALSE && state != STOP_STATE) {
-                        unsigned char byte_read = 0;
-                        int n_bytes_read = readByteSerialPort(&byte_read);
-                        if(n_bytes_read == 0) continue;
-                        switch (state) {
-                            case START_STATE:
-                                if(byte_read == FLAG){
-                                    state = FLAG_STATE;
-                                    //printf("First flag received\n");
-                                }
-                                break;
-                            
-                            case FLAG_STATE:
-                                if(byte_read == ADDRESS_SNDR){
-                                    state = ADDRESS_STATE;
-                                    //printf("Adress received\n");
-                                }
-                                else if(byte_read != FLAG){
-                                    state = START_STATE;
-                                    //printf("Back to start :(\n");
-                                }
-                                break;
-                            
-                            case ADDRESS_STATE:
-                                if(byte_read == CONTROL_UA) {
-                                    state = CONTROL_STATE;
-                                    //printf("Control received\n");
-                                } else if (byte_read == FLAG) {
-                                    state = FLAG_STATE;
-                                    //printf("Flag received instead of control\n");
-                                } else {
-                                    state = START_STATE;
-                                    //printf("Back to start from address\n");
-                                }
-                                break;
-                            
-                            case CONTROL_STATE:
-                                if(byte_read == (ADDRESS_SNDR ^ CONTROL_UA)){
-                                    state = BCC1_STATE;
-                                    //printf("BCC received\n");
-                                }
-                                else if(byte_read == FLAG){
-                                    state = FLAG_STATE;
-                                    //printf("Flag received instead of BCC\n");
-                                }
-                                else {
-                                    state = START_STATE;
-                                    //printf("Back to start from control\n");
-                                }
-                                break;
-                            
-                            case BCC1_STATE:
-                                if (byte_read == FLAG) {
-                                    state = STOP_STATE;
-                                    alarm(0);
-                                    alarmEnabled = FALSE;
-                                    printf("ua_frame received - Stopping\n");
-                                    if (closeSerialPort() < 0) return -1;
-                                    return 1;
-                                    //printf("Last flag received proceded to stop\n");
-                                }
-                                else {
-                                    state = START_STATE;
-                                    //printf("All the way to the start from BCC\n");
-                                }
-                                break;
-                            
-                            default:
-                                break;
-                        }
-                    }
-                }
-            }
-            printf("TIMEOUT: UA frame not received!\n");
-            break;
-        
-        case LlTx:
-            // TODO: Send DISC
-
+            // Receiving DISC frame:
             frameState_t state = START_STATE;
-            while (alarmEnabled != FALSE && state != STOP_STATE) {
+            while (state != STOP_STATE) {
                 unsigned char byte_read = 0;
                 int n_bytes_read = readByteSerialPort(&byte_read);
                 if(n_bytes_read == 0) continue;
@@ -768,16 +682,18 @@ int llclose(int showStatistics) {
                         break;
                 }
             }
-
+            
+            // Sending DISC frame:
+            alarmCount = 0;
             while (alarmCount < 5) {
                 if (alarmEnabled == FALSE) {
-                    alarm(timeout); // Set alarm to be triggered in timeout seconds
+                    alarm(timeout);
                     alarmEnabled = TRUE;
                     
-                    int bytes = writeBytesSerialPort(disc_frame, ASW_BUF_SIZE);
-                    printf("%d bytes written\n", bytes);
+                    int bytes = writeBytesSerialPort(disc_frame_rcvr, ASW_BUF_SIZE);
+                    printf("INFO: %d bytes written - RECEIVER DISC\n", bytes);
                     
-                    frameState_t state = START_STATE;
+                    state = START_STATE;
                     while (alarmEnabled != FALSE && state != STOP_STATE) {
                         unsigned char byte_read = 0;
                         int n_bytes_read = readByteSerialPort(&byte_read);
@@ -786,46 +702,46 @@ int llclose(int showStatistics) {
                             case START_STATE:
                                 if(byte_read == FLAG){
                                     state = FLAG_STATE;
-                                    //printf("First flag received\n");
+                                    // printf("First flag received\n");
                                 }
                                 break;
                             
                             case FLAG_STATE:
-                                if(byte_read == ADDRESS_SNDR){
+                                if(byte_read == ADDRESS_RCVR){
                                     state = ADDRESS_STATE;
-                                    //printf("Adress received\n");
+                                    // printf("Adress received\n");
                                 }
                                 else if(byte_read != FLAG){
                                     state = START_STATE;
-                                    //printf("Back to start :(\n");
+                                    // printf("Back to start :(\n\n");
                                 }
                                 break;
                             
                             case ADDRESS_STATE:
-                                if(byte_read == CONTROL_DISC) {
+                                if(byte_read == CONTROL_UA) {
                                     state = CONTROL_STATE;
-                                    //printf("Control received\n");
+                                    // printf("Control received\n");
                                 } else if (byte_read == FLAG) {
                                     state = FLAG_STATE;
-                                    //printf("Flag received instead of control\n");
+                                    // printf("Flag received instead of control\n");
                                 } else {
                                     state = START_STATE;
-                                    //printf("Back to start from address\n");
+                                    // printf("Back to start from address\n");
                                 }
                                 break;
                             
                             case CONTROL_STATE:
-                                if(byte_read == (ADDRESS_SNDR ^ CONTROL_DISC)){
+                                if(byte_read == (ADDRESS_RCVR ^ CONTROL_UA)){
                                     state = BCC1_STATE;
-                                    //printf("BCC received\n");
+                                    // printf("BCC received\n");
                                 }
                                 else if(byte_read == FLAG){
                                     state = FLAG_STATE;
-                                    //printf("Flag received instead of BCC\n");
+                                    // printf("Flag received instead of BCC\n");
                                 }
                                 else {
                                     state = START_STATE;
-                                    //printf("Back to start from control\n");
+                                    // printf("Back to start from control\n");
                                 }
                                 break;
                             
@@ -834,15 +750,12 @@ int llclose(int showStatistics) {
                                     state = STOP_STATE;
                                     alarm(0);
                                     alarmEnabled = FALSE;
-                                    writeBytesSerialPort(ua_frame,ASW_BUF_SIZE);
-                                    printf("ua_frame Sent - Stopping\n");
-                                    if (closeSerialPort() < 0) return -1;
+                                    printf("INFO: Successfully disconnected\n");
                                     return 1;
-                                    //printf("Last flag received proceded to stop\n");
                                 }
                                 else {
                                     state = START_STATE;
-                                    //printf("All the way to the start from BCC\n");
+                                    // printf("All the way to the start from BCC\n");
                                 }
                                 break;
                             
@@ -852,7 +765,99 @@ int llclose(int showStatistics) {
                     }
                 }
             }
-            printf("TIMEOUT: UA frame not sent!\n");
+            printf("TIMEOUT: UA frame not received!\n");
+            break;
+        
+        case LlTx:
+            // TODO: Send DISC
+
+            alarmCount = 0;
+
+            while (alarmCount < 5) {
+                if (alarmEnabled == FALSE) {
+                    alarm(timeout); // Set alarm to be triggered in 3s
+                    alarmEnabled = TRUE;
+                    
+                    int bytes = writeBytesSerialPort(disc_frame_sndr, ASW_BUF_SIZE);
+                    printf("INFO: %d bytes written - SENDER DISC\n", bytes);
+                    
+                    frameState_t state = START_STATE;
+                    while (alarmEnabled != FALSE && state != STOP_STATE) {
+                        unsigned char byte_read = 0;
+                        int n_bytes_read = readByteSerialPort(&byte_read);
+                        if(n_bytes_read == 0) continue;
+                    
+                        switch (state) {
+                            case START_STATE:
+                                if(byte_read == FLAG){
+                                    state = FLAG_STATE;
+                                    // printf("First flag received\n");
+                                }
+                                break;
+                            
+                            case FLAG_STATE:
+                                if(byte_read == ADDRESS_RCVR){
+                                    state = ADDRESS_STATE;
+                                    // printf("Adress received\n");
+                                }
+                                else if(byte_read != FLAG){
+                                    state = START_STATE;
+                                    // printf("Back to start :(\n");
+                                }
+                                break;
+                            
+                            case ADDRESS_STATE:
+                                if(byte_read == CONTROL_DISC) {
+                                    state = CONTROL_STATE;
+                                    // printf("Control received\n");
+                                } else if (byte_read == FLAG) {
+                                    state = FLAG_STATE;
+                                    // printf("Flag received instead of control\n");
+                                } else {
+                                    state = START_STATE;
+                                    // printf("Back to start from address\n");
+                                }
+                                break;
+                            
+                            case CONTROL_STATE:
+                                if(byte_read == (ADDRESS_RCVR ^ CONTROL_DISC)){
+                                    state = BCC1_STATE;
+                                    // printf("BCC received\n");
+                                }
+                                else if(byte_read == FLAG){
+                                    state = FLAG_STATE;
+                                    // printf("Flag received instead of BCC\n");
+                                }
+                                else {
+                                    state = START_STATE;
+                                    // printf("Back to start from control\n");
+                                }
+                                break;
+                            
+                            case BCC1_STATE:
+                                if (byte_read == FLAG) {
+                                    state = STOP_STATE;
+                                    alarm(0);
+                                    alarmEnabled = FALSE;
+
+                                    int bytes = writeBytesSerialPort(ua_frame_disc, ASW_BUF_SIZE);
+                                    printf("INFO: %d bytes written - UA\n", bytes);
+                                    printf("INFO: Successfully disconnected\n");
+                                    return 1;
+                                }
+                                else {
+                                    state = START_STATE;
+                                    // printf("All the way to the start from BCC\n");
+                                }
+                                break;
+                            
+                            default:
+                                break;
+                        }
+                    }
+                }
+            }
+            printf("TIMEOUT: DISC frame not received!\n");
             break;
     }
 

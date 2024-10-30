@@ -31,18 +31,17 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     unsigned char packet[PACKET_SIZE * 2];
 
     if (llopen(linklayer) != 1){
-        printf("Error in opening the serial port\n");
+        printf("ERROR: Unable to open serial port\n");
         exit(1);
     }
 
-    printf("llopen successfull\n");
+    // printf("llopen successfull\n");
 
-    
     switch (linklayer.role) {
         case LlTx : {
             FILE * file = fopen(filename,"r");
             if (file == NULL){
-                printf("Could not open the file\n");
+                printf("ERROR: Could not open the file\n");
                 exit(1);
             }
 
@@ -74,7 +73,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
 
             if(llwrite(ctrl_packet,size_ctrl_packet) == -1){
-                printf("Control packet not written properly!\n");
+                printf("ERROR: Control packet not written properly!\n");
                 fclose(file);
                 exit(1);
             }
@@ -89,7 +88,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
 
             while(bytesToSend > 0){
-                printf("Bytes Still to send:%d\n",bytesToSend);
+                printf("INFO: Bytes Still to send:%d\n",bytesToSend);
                 i = 0;
                 int data_size;
                 if(bytesToSend < PACKET_SIZE - 4) data_size = bytesToSend;
@@ -107,16 +106,16 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 // file_content += data_size;
 
                 if(llwrite(data_packet,size_data_packet) == -1){
-                    printf("Data Packet has errors\n");
+                    printf("ERROR: Data Packet has errors\n");
                     fclose(file);
                     exit(1);
                 }            
             }
-            printf("Tudo enviado como manda a spatilha\n");
+            // printf("Tudo enviado como manda a spatilha\n");
             free(file_content);
             ctrl_packet[0] = PACKET_CTRL_END;
             if(llwrite(ctrl_packet,size_ctrl_packet) == -1){
-                printf("Final Control packet not written properly!\n");
+                printf("ERROR: Final Control packet not written properly!\n");
                 fclose(file);
                 exit(1);
             }
@@ -127,34 +126,22 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         
         case LlRx: {
             int ctrl_size = llread(packet);
-            for(int i = 0; i < ctrl_size; i++) printf("Byte[%d]:%x\n",i,packet[i]);
+            for(int i = 0; i < ctrl_size; i++) printf("INFO: Byte[%d]:%x\n",i,packet[i]);
             if (ctrl_size == -1) {
                 printf("ERROR: Unable to read Control Packet from link layer.\n");
                 exit(1);
             }   
-            printf("Nº de bytes lidos:%d\n",ctrl_size);
+            printf("INFO: Nº de bytes lidos:%d\n",ctrl_size);
             unsigned long fileSize = 0;
             
             for(unsigned i = 0; i < 8; i++) {
                 fileSize += packet[3 + i] << 8 * (8 - i - 1);
             }
-            
-    
-            
-            // memcpy(&fileSize, packet + 3, packet[2]);
-            //printf("Nao foi do primeiro memcpy\n");
-            // unsigned int fileName;
-            // memcpy(&fileName,packet[3 + fileSize + 2],packet[3 + fileSize + 1]);
-            // printf("filesize: %d\n",fileSize); // TODO: Remove these lines
            
             char oldFileName[256] = {0};
             memcpy(&oldFileName, &packet[3 + 8 + 2],packet[3 + 8 + 1]);
-            printf("Filename=\"%s\"\n", oldFileName);
-
-            // printf("Nao foi do segundo memcpy\n"); // TODO: Remove this line
+            printf("INFO: Filename=\"%s\"\n", oldFileName); // TODO: Do something with the old filename. Maybe print it in the final statistics alongside the file size.
             FILE * new_file = fopen(filename,"w");
-            
-            // printf("Nao foi da criaçao do ficheiro\n"); // TODO: remove this line
             
             while (TRUE) {
                 int read_packet_size = 0;
@@ -177,10 +164,10 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     }
 
     if (llclose(TRUE) != 1) {
-        printf("Error in closing the serial port\n");
+        printf("ERROR: Unable to close serial port\n");
         exit(1);
     }
-    printf("Serial port succssefully closed ^_^\n");
+    printf("INFO: Serial port succssefully closed!\n");
     
     return;
 
