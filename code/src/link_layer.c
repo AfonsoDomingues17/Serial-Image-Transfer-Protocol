@@ -25,15 +25,15 @@
 #define CONTROL_B0      0X00
 #define CONTROL_B1      0x80
 
-unsigned char rr_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_RR0,ADDRESS_SNDR ^ CONTROL_RR0, FLAG};
-unsigned char rr_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_RR1,ADDRESS_SNDR ^ CONTROL_RR1, FLAG};
-unsigned char rej_0[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_REJ0,ADDRESS_SNDR ^ CONTROL_REJ0, FLAG};
-unsigned char rej_1[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_REJ1,ADDRESS_SNDR ^ CONTROL_REJ1, FLAG};
-unsigned char disc_frame_sndr[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_DISC,ADDRESS_SNDR ^ CONTROL_DISC,FLAG};
-unsigned char disc_frame_rcvr[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_DISC,ADDRESS_RCVR ^ CONTROL_DISC,FLAG};
-unsigned char ua_frame[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_UA,ADDRESS_SNDR ^ CONTROL_UA,FLAG};
-unsigned char ua_frame_disc[ASW_BUF_SIZE] = {FLAG,ADDRESS_RCVR,CONTROL_UA,ADDRESS_RCVR ^ CONTROL_UA,FLAG};
-unsigned char set_frame[ASW_BUF_SIZE] = {FLAG,ADDRESS_SNDR,CONTROL_SET,ADDRESS_SNDR ^ CONTROL_SET,FLAG};
+unsigned char rr_0[ASW_BUF_SIZE] =               {FLAG, ADDRESS_SNDR, CONTROL_RR0 , ADDRESS_SNDR ^ CONTROL_RR0,    FLAG};
+unsigned char rr_1[ASW_BUF_SIZE] =               {FLAG, ADDRESS_SNDR, CONTROL_RR1 , ADDRESS_SNDR ^ CONTROL_RR1,    FLAG};
+unsigned char rej_0[ASW_BUF_SIZE] =              {FLAG, ADDRESS_SNDR, CONTROL_REJ0, ADDRESS_SNDR ^ CONTROL_REJ0,   FLAG};
+unsigned char rej_1[ASW_BUF_SIZE] =              {FLAG, ADDRESS_SNDR, CONTROL_REJ1, ADDRESS_SNDR ^ CONTROL_REJ1,   FLAG};
+unsigned char disc_frame_sndr[ASW_BUF_SIZE] =    {FLAG, ADDRESS_SNDR, CONTROL_DISC, ADDRESS_SNDR ^ CONTROL_DISC,   FLAG};
+unsigned char disc_frame_rcvr[ASW_BUF_SIZE] =    {FLAG, ADDRESS_RCVR, CONTROL_DISC, ADDRESS_RCVR ^ CONTROL_DISC,   FLAG};
+unsigned char ua_frame[ASW_BUF_SIZE] =           {FLAG, ADDRESS_SNDR, CONTROL_UA  , ADDRESS_SNDR ^ CONTROL_UA,     FLAG};
+unsigned char ua_frame_disc[ASW_BUF_SIZE] =      {FLAG, ADDRESS_RCVR, CONTROL_UA  , ADDRESS_RCVR ^ CONTROL_UA,     FLAG};
+unsigned char set_frame[ASW_BUF_SIZE] =          {FLAG, ADDRESS_SNDR, CONTROL_SET , ADDRESS_SNDR ^ CONTROL_SET,    FLAG};
 
 volatile int STOP = FALSE;
 
@@ -46,16 +46,22 @@ int nRetransmitions = 0;
 
 int frame_n = 0;
 
+typedef struct {
+    unsigned int n_frames;
+    unsigned int n_timeouts;
+    unsigned int n_retransmissions;
+    
+} Statistics;
+
+Statistics statistics = {0};
+
 void alarmHandler(int signal)
 {
     alarmEnabled = FALSE;
     alarmCount++;
-    printf("Alarm #%d\n", alarmCount); // TODO: Maybe remove this?? Also, show the number of alarms handled in the final statistics
+    statistics.n_timeouts++;
+    printf("Alarm #%d\n", alarmCount); 
 }
-
-// TODO: STORE STATISTICS
-//      Number of frames sent
-//      Time in the connection
 
 ////////////////////////////////////////////////
 // LLOPEN
@@ -67,7 +73,7 @@ int llopen(LinkLayer connectionParameters) {
 
     role = connectionParameters.role;
     timeout = connectionParameters.timeout;
-    nRetransmitions = connectionParameters.nRetransmissions;   
+    nRetransmitions = connectionParameters.nRetransmissions;
 
     switch (connectionParameters.role) {
         case LlTx:
@@ -82,6 +88,7 @@ int llopen(LinkLayer connectionParameters) {
                     
                     int bytes = writeBytesSerialPort(set_frame, ASW_BUF_SIZE);
                     printf("INFO: %d bytes written\n", bytes);
+                    statistics.n_frames++;
                     
                     frameState_t state = START_STATE;
                     while (alarmEnabled != FALSE && state != STOP_STATE) {
@@ -141,7 +148,7 @@ int llopen(LinkLayer connectionParameters) {
                                     state = STOP_STATE;
                                     alarm(0);
                                     alarmEnabled = FALSE;
-                                    printf("INFO: Connection established sucssfuly\n");
+                                    printf("INFO: Connection established successfuly\n");
                                     frame_n = 0;
                                     return 1;
                                 }
@@ -229,10 +236,11 @@ int llopen(LinkLayer connectionParameters) {
                         break;
                 }
             }
-            printf("INFO: Connection stablished sussfully!\n");
+            printf("INFO: Connection stablished successfully!\n");
             int bytes = writeBytesSerialPort(ua_frame,ASW_BUF_SIZE);
             if (bytes != 5) printf("ERROR: Failed to send 5 bytes (UA frame).\n");
             frame_n = 0;
+            statistics.n_frames++;
             return 1;
             break;
 
@@ -253,7 +261,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
     bool is_rej = false;
     
     // BYTE STUFFING:
-    unsigned char stuffed_buf[BUF_SIZE * 2] = {0}; // TODO: modify this size
+    unsigned char stuffed_buf[BUF_SIZE * 2] = {0};
     unsigned j = 0;
     stuffed_buf[j++] = FLAG;
     stuffed_buf[j++] = ADDRESS_SNDR;
@@ -291,7 +299,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
             
             int bytes = writeBytesSerialPort(stuffed_buf,j);
             printf("INFO: %d bytes written\n", bytes);
-            
+            statistics.n_frames++;
             //nsigned char asw_frame[BUF_SIZE] = {0};
             //int bytes_read = read(fd, asw_frame, ASW_BUF_SIZE);
             //for (unsigned i = 0; i < ASW_BUF_SIZE; i++) readByteSerialPort(&asw_frame[i]);
@@ -385,7 +393,8 @@ int llwrite(const unsigned char *buf, int bufSize) {
                 alarm(0);
                 alarmEnabled = FALSE;
                 nRetransmitions--;
-                printf("INFO: Frame rejected - retrasmiting\n"); // TODO: Is this print necessary? 
+                statistics.n_retransmissions++;
+                printf("INFO: Frame rejected - retrasmiting\n"); // TODO: Is this print necessary?
                 continue;
             } else if (!is_rej && state == STOP_STATE) {
                 alarm(0);
@@ -400,7 +409,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
         }
         
     }
-    if (is_rej) printf("ERROR: Number of retransmissions exxceeded!\n");
+    if (is_rej) printf("ERROR: Number of retransmissions exceeded!\n");
     else printf("TIMEOUT: Could not send the frame\n");
 
     return -1;
@@ -565,11 +574,13 @@ int llread(unsigned char *packet) {
                 if (control == CONTROL_B0) {
                     bytes = writeBytesSerialPort(rej_0,ASW_BUF_SIZE);
                     frame_n = 0;
+                    
                     // printf("Sent rej0\n");
                     state = START_STATE;
                 } else {
                     bytes = writeBytesSerialPort(rej_1,ASW_BUF_SIZE);
                     frame_n = 1;
+                    
                     // printf("Sent rej1\n");
                     state = START_STATE;
                 }
@@ -598,7 +609,7 @@ int llread(unsigned char *packet) {
     }
     printf("INFO: Bytes sent in answer:%d\n",bytes);
     printf("INFO: Read packet size:%d\n",size);
- 
+    statistics.n_frames++;
     return size;
 }
 
@@ -670,6 +681,7 @@ int llclose(int showStatistics) {
                     case BCC1_STATE:
                         if (byte_read == FLAG) {
                             state = STOP_STATE;
+                            statistics.n_frames++;
                             //printf("Last flag received proceded to stop\n");
                         }
                         else {
@@ -751,6 +763,12 @@ int llclose(int showStatistics) {
                                     alarm(0);
                                     alarmEnabled = FALSE;
                                     printf("INFO: Successfully disconnected\n");
+                                    statistics.n_frames++;
+
+                                    if (showStatistics) {
+                                        printf("\nSTATISTICS:\n");
+                                        printf("Number of frames well received: %d\n", statistics.n_frames);
+                                    }
                                     return 1;
                                 }
                                 else {
@@ -769,8 +787,6 @@ int llclose(int showStatistics) {
             break;
         
         case LlTx:
-            // TODO: Send DISC
-
             alarmCount = 0;
 
             while (alarmCount < 5) {
@@ -780,6 +796,7 @@ int llclose(int showStatistics) {
                     
                     int bytes = writeBytesSerialPort(disc_frame_sndr, ASW_BUF_SIZE);
                     printf("INFO: %d bytes written - SENDER DISC\n", bytes);
+                    statistics.n_frames++;
                     
                     frameState_t state = START_STATE;
                     while (alarmEnabled != FALSE && state != STOP_STATE) {
@@ -839,10 +856,18 @@ int llclose(int showStatistics) {
                                     state = STOP_STATE;
                                     alarm(0);
                                     alarmEnabled = FALSE;
+                                    statistics.n_frames++;
 
                                     int bytes = writeBytesSerialPort(ua_frame_disc, ASW_BUF_SIZE);
                                     printf("INFO: %d bytes written - UA\n", bytes);
                                     printf("INFO: Successfully disconnected\n");
+
+                                    if (showStatistics) {
+                                        printf("\nSTATISTICS:\n");
+                                        printf("Number of frames sent:                     %d\n",statistics.n_frames);
+                                        printf("Number of Timeouts:                        %d\n", statistics.n_timeouts);
+                                        printf("Number of frames retransmited (rejection): %d\n", statistics.n_retransmissions);
+                                    }
                                     return 1;
                                 }
                                 else {
