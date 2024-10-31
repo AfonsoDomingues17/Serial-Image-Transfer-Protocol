@@ -42,14 +42,15 @@ int alarmEnabled = FALSE;
 int alarmCount;
 LinkLayerRole role;
 int timeout = 0;
-int nRetransmitions = 0;
+int nRetransmissions = 0;
+int nTries = 0;
 
 int frame_n = 0;
 
 typedef struct {
     unsigned int n_frames;
     unsigned int n_timeouts;
-    unsigned int n_retransmissions;
+    int n_retransmissions;
     
 } Statistics;
 
@@ -73,15 +74,17 @@ int llopen(LinkLayer connectionParameters) {
 
     role = connectionParameters.role;
     timeout = connectionParameters.timeout;
-    nRetransmitions = connectionParameters.nRetransmissions;
+    nRetransmissions = connectionParameters.nRetransmissions;
 
+    frameState_t state;
     switch (connectionParameters.role) {
         case LlTx:
             (void)signal(SIGALRM, alarmHandler);
             
             alarmCount = 0;
-
-            while (alarmCount < 5) {
+            
+            statistics.n_retransmissions--;
+            while (alarmCount < nRetransmissions) {
                 if (alarmEnabled == FALSE) {
                     alarm(timeout); // Set alarm to be triggered in 3s
                     alarmEnabled = TRUE;
@@ -89,8 +92,9 @@ int llopen(LinkLayer connectionParameters) {
                     int bytes = writeBytesSerialPort(set_frame, ASW_BUF_SIZE);
                     printf("INFO: %d bytes written\n", bytes);
                     statistics.n_frames++;
+                    statistics.n_retransmissions++;
                     
-                    frameState_t state = START_STATE;
+                    state = START_STATE;
                     while (alarmEnabled != FALSE && state != STOP_STATE) {
                         unsigned char byte_read = 0;
                         int n_bytes_read = readByteSerialPort(&byte_read);
@@ -169,7 +173,7 @@ int llopen(LinkLayer connectionParameters) {
             break;
         
         case LlRx:
-            frameState_t state = START_STATE;
+            state = START_STATE;
             while (state != STOP_STATE) {
                 unsigned char byte_read = 0;
                 int n_bytes_read = readByteSerialPort(&byte_read);
@@ -291,7 +295,8 @@ int llwrite(const unsigned char *buf, int bufSize) {
     stuffed_buf[j++] = bcc2;
     stuffed_buf[j++] = FLAG;
 
-    while (nRetransmitions > 0 && alarmCount < 5) {
+    statistics.n_retransmissions--;
+    while (alarmCount < nRetransmissions) {
         if (alarmEnabled == FALSE) {
             alarm(timeout); // Set alarm to be triggered in 3s
             alarmEnabled = TRUE;
@@ -300,6 +305,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
             int bytes = writeBytesSerialPort(stuffed_buf,j);
             printf("INFO: %d bytes written\n", bytes);
             statistics.n_frames++;
+            statistics.n_retransmissions++;
             //nsigned char asw_frame[BUF_SIZE] = {0};
             //int bytes_read = read(fd, asw_frame, ASW_BUF_SIZE);
             //for (unsigned i = 0; i < ASW_BUF_SIZE; i++) readByteSerialPort(&asw_frame[i]);
@@ -392,7 +398,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
             if (is_rej && state == STOP_STATE) {
                 alarm(0);
                 alarmEnabled = FALSE;
-                nRetransmitions--;
+                // nRetransmissions--;
                 statistics.n_retransmissions++;
                 printf("INFO: Frame rejected - retrasmiting\n"); // TODO: Is this print necessary?
                 continue;
@@ -437,7 +443,7 @@ int llread(unsigned char *packet) {
         // printf("%d\n",n_bytes_read);
         if(n_bytes_read == 0 && state != FLAG2_STATE) continue;
         
-
+        unsigned char bcc;
         switch (state) {
             case START_STATE:
                 //printf("First flag received\n");
@@ -539,8 +545,8 @@ int llread(unsigned char *packet) {
                 break;
 
             case FLAG2_STATE:
-            //printf("Estou no estado final\n");
-                unsigned char bcc = packet[0];
+                //printf("Estou no estado final\n");
+                bcc = packet[0];
                 for (unsigned v = 1; v < (i-1); v++) bcc ^= packet[v];
                 
                 if (bcc == packet[i-1]){
@@ -623,10 +629,11 @@ int llclose(int showStatistics) {
     
     alarmCount = 0;
 
+    frameState_t state = START_STATE;
     switch (role) {
         case LlRx:
             // Receiving DISC frame:
-            frameState_t state = START_STATE;
+            state = START_STATE;
             while (state != STOP_STATE) {
                 unsigned char byte_read = 0;
                 int n_bytes_read = readByteSerialPort(&byte_read);
@@ -697,7 +704,7 @@ int llclose(int showStatistics) {
             
             // Sending DISC frame:
             alarmCount = 0;
-            while (alarmCount < 5) {
+            while (alarmCount < nRetransmissions) {
                 if (alarmEnabled == FALSE) {
                     alarm(timeout);
                     alarmEnabled = TRUE;
@@ -788,8 +795,8 @@ int llclose(int showStatistics) {
         
         case LlTx:
             alarmCount = 0;
-
-            while (alarmCount < 5) {
+            statistics.n_retransmissions--;
+            while (alarmCount < nRetransmissions) {
                 if (alarmEnabled == FALSE) {
                     alarm(timeout); // Set alarm to be triggered in 3s
                     alarmEnabled = TRUE;
@@ -797,8 +804,9 @@ int llclose(int showStatistics) {
                     int bytes = writeBytesSerialPort(disc_frame_sndr, ASW_BUF_SIZE);
                     printf("INFO: %d bytes written - SENDER DISC\n", bytes);
                     statistics.n_frames++;
+                    statistics.n_retransmissions++;
                     
-                    frameState_t state = START_STATE;
+                    state = START_STATE;
                     while (alarmEnabled != FALSE && state != STOP_STATE) {
                         unsigned char byte_read = 0;
                         int n_bytes_read = readByteSerialPort(&byte_read);
