@@ -106,7 +106,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 // file_content += data_size;
 
                 if(llwrite(data_packet,size_data_packet) == -1){
-                    printf("ERROR: Data Packet has errors\n");
+                    printf("ERROR: Unable to write Data Packet.\n");
                     fclose(file);
                     exit(1);
                 }            
