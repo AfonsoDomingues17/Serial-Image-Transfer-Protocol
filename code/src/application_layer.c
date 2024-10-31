@@ -27,15 +27,12 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     linklayer.nRetransmissions = nTries;
     linklayer.timeout = timeout;
 
-    //unsigned char frame[14] = {0x7e,0x03,0x00,0x03 ^ 0x00,0x02,0x7e,0x02,0x02,0x02,0x02,0x02,0x02, 0x7c, 0x7e};
     unsigned char packet[PACKET_SIZE * 2];
 
     if (llopen(linklayer) != 1){
         printf("ERROR: Unable to open serial port\n");
         exit(1);
     }
-
-    // printf("llopen successfull\n");
 
     switch (linklayer.role) {
         case LlTx : {
@@ -47,7 +44,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
             fseek(file,0,SEEK_END); // redirects the pointer to the end of the file
             long int file_size = ftell(file); // returns the current offset from the starting position
-            //rewind(fi)
             fseek(file,0,SEEK_SET); // redirects the pointer back to the start of the file
 
             int L1 = 8; // ceil(log2((double)file_size) / 8.0);
@@ -61,12 +57,12 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             unsigned char ctrl_packet[size_ctrl_packet];
             int i = 0;
             ctrl_packet[i++] = PACKET_CTRL_START;
-            ctrl_packet[i++] = PACKET_TYPE_SIZE; //type file size
+            ctrl_packet[i++] = PACKET_TYPE_SIZE; // type file size
             ctrl_packet[i++] = L1;
             for(int v = L1 - 1; v >= 0; v--){
                 ctrl_packet[i++] = (file_size >> (8 * v) & 0xFF);
             }
-            ctrl_packet[i++] = PACKET_TYPE_NAME; //type filename
+            ctrl_packet[i++] = PACKET_TYPE_NAME; // type filename
             ctrl_packet[i++] = L2;
             memcpy(&ctrl_packet[i],filename,L2);
             i += L2;
@@ -103,7 +99,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 data_packet[i++] = data_size & 0xFF;
                 memcpy(data_packet + 4, file_content + offset, data_size);
                 offset += data_size;
-                // file_content += data_size;
 
                 if(llwrite(data_packet,size_data_packet) == -1){
                     printf("ERROR: Unable to write Data Packet.\n");
@@ -111,7 +106,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     exit(1);
                 }            
             }
-            // printf("Tudo enviado como manda a spatilha\n");
             free(file_content);
             ctrl_packet[0] = PACKET_CTRL_END;
             if(llwrite(ctrl_packet,size_ctrl_packet) == -1){
