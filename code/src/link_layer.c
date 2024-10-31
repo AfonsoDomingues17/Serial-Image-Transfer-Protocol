@@ -399,7 +399,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
                 alarm(0);
                 alarmEnabled = FALSE;
                 // nRetransmissions--;
-                statistics.n_retransmissions++;
+                // statistics.n_retransmissions++;
                 printf("INFO: Frame rejected - retrasmiting\n"); // TODO: Is this print necessary?
                 continue;
             } else if (!is_rej && state == STOP_STATE) {
@@ -872,9 +872,9 @@ int llclose(int showStatistics) {
 
                                     if (showStatistics) {
                                         printf("\nSTATISTICS:\n");
-                                        printf("Number of frames sent:                     %d\n",statistics.n_frames);
-                                        printf("Number of Timeouts:                        %d\n", statistics.n_timeouts);
-                                        printf("Number of frames retransmited (rejection): %d\n", statistics.n_retransmissions);
+                                        printf("Number of frames sent:         %d\n",statistics.n_frames);
+                                        printf("Number of Timeouts:            %d\n", statistics.n_timeouts);
+                                        printf("Number of frames retransmited: %d\n", statistics.n_retransmissions);
                                     }
                                     return 1;
                                 }
