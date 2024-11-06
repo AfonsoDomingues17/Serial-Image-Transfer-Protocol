@@ -3,6 +3,7 @@
 #include "link_layer.h"
 #include "serial_port.h"
 #include "state_machine.h"
+#include "time.h"
 
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
@@ -346,7 +347,10 @@ int llwrite(const unsigned char *buf, int bufSize)
             alarmEnabled = TRUE;
             is_rej = false;
 
+            clock_t begin_tr = clock();
             int bytes = writeBytesSerialPort(stuffed_buf, j);
+            clock_t end_tr = clock();
+            printf("Time to transmitte:%f\n",(double)(end_tr - begin_tr)/CLOCKS_PER_SEC);
             printf("INFO: %d bytes written\n", bytes);
             statistics.n_frames++;
             statistics.n_retransmissions++;
@@ -475,6 +479,7 @@ int llwrite(const unsigned char *buf, int bufSize)
                     return j;
                 return j - 7;
             }
+            
         }
     }
     if (is_rej)
